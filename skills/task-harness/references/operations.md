@@ -8,11 +8,19 @@
 python3 PACKAGE/scripts/harness.py new --root INSTANCE --topic api-check --question '用户的具体问题'
 ```
 
-已有实例可增加不同 topic；已有任务应继续它。外来目录或文件冲突时选新目录，不接管其他项目。生成文件只是 DRAFT：由 Agent 根据用户请求填写 spec 和 expected CSV，不把空模板交回用户当作成果。
+已有实例可增加不同 topic；已有任务应继续它。外来目录或文件冲突时选新目录，不接管其他项目。生成文件只是 DRAFT：由 Agent 根据用户请求填写所选类型的任务定义和 expected CSV，不把空模板交回用户当作成果。
 
-当前实例生成器提供 verify/api。支持范围以 catalog 为准，不凭任务名字猜测底座已经实现。详细合同与后续命令见 [验证流程](verify.md)。`run_command` 只是记录，不会被公共脚本自动执行。
+实例生成器支持 verify/api 和 research/company、earnings、peers。未指定 --template 时保持兼容，创建 verify/api。金融研究由 Agent 选择场景后运行：
 
-续做先读任务 README 的当前基线、最近结果与下一步；已有对账可用 contract.py replay 检查后再继续，不盲目重跑付费或有副作用的请求。
+```sh
+python3 PACKAGE/scripts/harness.py new --root INSTANCE --template research --scene company --topic company-review --question '用户问题'
+```
+
+详细流程见 [验证流程](verify.md) 或 [研究流程](research.md)。研究任务使用 request.md、findings.md、review.md 和 inputs/research.json，不生成验证型 spec；不能对研究任务盲跑 contract.py freeze。需要冻结实验时另建 verify 任务。
+
+`run_command` 只是验证合同中的记录，不会被公共脚本自动执行。
+
+续做先读任务 README 的当前基线、最近结果与下一步；按 task.json 类型选 contract.py replay 或 research.py replay 检查后再继续，不盲目重跑付费或有副作用的请求。
 
 ## 查看与体检
 
@@ -21,7 +29,7 @@ python3 PACKAGE/scripts/harness.py list
 python3 PACKAGE/scripts/harness.py doctor --root INSTANCE
 ```
 
-list 展示本包目录。doctor 是只读检查；DRAFT 合同没填完整时会报 NEEDS_ATTENTION，应由 Agent 补完已知信息。授权、连通、生效没有实测就保持 unknown。检查通过不代表业务任务已完成。
+list 展示本包目录。doctor 是只读检查；DRAFT 合同或研究材料没填完整时会报 NEEDS_ATTENTION，应由 Agent 补完已知信息。授权、连通、生效没有实测就保持 unknown。检查通过不代表业务任务已完成。
 
 ## 安装与更新
 

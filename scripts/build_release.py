@@ -9,7 +9,11 @@ from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "skills/task-harness"
 FILES = ["SKILL.md", "INSTALL.md", "catalog.json", "references/operations.md", "scripts/contract.py", "scripts/harness.py", "scripts/install.py",
-         "references/red-lines.md", "references/verify.md", "references/api.md", "assets/verify/spec.json", "assets/verify/expected.csv"]
+         "references/red-lines.md", "references/verify.md", "references/api.md", "assets/verify/spec.json", "assets/verify/expected.csv",
+         "scripts/finance.py", "scripts/research.py", "references/research.md", "references/finance-methods.md",
+         "references/finance-company.md", "references/finance-earnings.md", "references/finance-peers.md",
+         "assets/research/research.json", "assets/research/metrics.json", "assets/research/request.md",
+         "assets/research/findings.md", "assets/research/review.md", "assets/research/report.md"]
 
 
 def build(output):

@@ -184,7 +184,7 @@ class ContractTest(unittest.TestCase):
         next_source = self.base / "next-package"
         shutil.copytree(PACKAGE, next_source)
         with (next_source / "references/api.md").open("a") as handle: handle.write("\nA documented update.\n")
-        info = json.loads((next_source / "catalog.json").read_text()); info["version"] = "0.2.2"
+        info = json.loads((next_source / "catalog.json").read_text()); info["version"] = "0.3.1"
         (next_source / "catalog.json").write_text(json.dumps(info))
         install.install(next_source, dest, update=True)
         self.assertEqual(snapshot(self.instance), before)

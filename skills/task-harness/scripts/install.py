@@ -42,6 +42,15 @@ def install(source, dest, update=False):
     info = json.loads((source / "catalog.json").read_text(encoding="utf-8"))
     require(info.get("name") == "task-harness" and info.get("schema") == "ablemind.task-harness/v1", "wrong package")
     require(isinstance(info.get("version"), str) and info["version"], "package version missing")
+    # A catalog entry must not advertise resources absent from the delivered package.
+    references = list(info.get("shared", {}).values())
+    for template in info.get("templates", []):
+        references.append(template["reference"])
+        references.extend(template.get("scene_resources", {}).values())
+        for field in ("assets", "scripts", "methods"):
+            references.extend(template.get(field, []))
+    for ref in references:
+        require(isinstance(ref, str) and ref in hashes, f"catalog resource missing: {ref}")
     if update:
         require((dest / RECEIPT).is_file(), "update requires an installation created by this installer")
         receipt = json.loads((dest / RECEIPT).read_text(encoding="utf-8"))

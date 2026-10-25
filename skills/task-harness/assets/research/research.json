@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "as_of": "",
+  "sources": [],
+  "claims": [],
+  "calculation_files": [],
+  "review": [],
+  "deliverables": [],
+  "limitations": [],
+  "expected": "inputs/expected-v1.csv"
+}
