@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "topic": "example-topic",
+  "question": "",
+  "as_of": "",
+  "scope": {
+    "included": [],
+    "excluded": [],
+    "population": "",
+    "enumeration": "bounded",
+    "denominator_basis": ""
+  },
+  "baseline_timing": "prospective",
+  "expected": "inputs/expected-v1.csv",
+  "baseline": "inputs/2000-01-01-baseline-v1.json",
+  "run_command": "",
+  "environment": "",
+  "sample_plan": "",
+  "stop_rule": "",
+  "revision": {
+    "previous_baseline": null,
+    "reason": ""
+  }
+}

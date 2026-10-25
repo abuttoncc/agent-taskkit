@@ -1,0 +1,48 @@
+{
+  "schema": "ablemind.task-harness/v1",
+  "name": "task-harness",
+  "version": "0.2.1",
+  "templates": [
+    {
+      "name": "verify",
+      "scenes": [
+        "api"
+      ],
+      "status": "preview",
+      "reference": "references/verify.md",
+      "title": "通用验证与 API 测试",
+      "use_when": [
+        "验证一个明确承诺是否成立，需要逐项证据与复跑记录",
+        "测试 API 的实际响应与用户要求是否一致"
+      ],
+      "scene_resources": {
+        "api": "references/api.md"
+      },
+      "assets": [
+        "assets/verify/spec.json",
+        "assets/verify/expected.csv"
+      ],
+      "scripts": [
+        "scripts/harness.py",
+        "scripts/contract.py"
+      ]
+    }
+  ],
+  "requirements": {
+    "python": ">=3.9",
+    "packages": []
+  },
+  "verified": {
+    "scope": "Local contract, installation and preservation tests; no cross-runtime or efficiency claim."
+  },
+  "distribution": {
+    "mode": "bundled",
+    "update_source": "https://github.com/abuttoncc/agent-taskkit/releases",
+    "repository": "https://github.com/abuttoncc/agent-taskkit"
+  },
+  "shared": {
+    "rules": "references/red-lines.md",
+    "operations": "references/operations.md",
+    "installation": "INSTALL.md"
+  }
+}
