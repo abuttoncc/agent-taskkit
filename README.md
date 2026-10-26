@@ -1,30 +1,54 @@
 # TaskKit
 
-一个让 Agent 按流程完成任务、保存证据、方便下次继续的 Skill。安装名为 `task-harness`，流程说明、模板和辅助脚本随包提供，由 Agent 按需使用。
+**给 Agent 一套工作秩序：工作区有统一约定，任务按需建目录，过程和成果各有归处。**
 
-## 能做什么
+TaskKit 是一个名为 `task-harness` 的 Skill。它把工作区规则、任务提示词框架和文件收纳结构连起来，让 Agent 知道新任务怎么开始、材料放哪里、下次从哪里继续。
 
-- **通用验证与 API 测试**：建立验收清单、检查结果、保存证据并复跑。
-- **金融研究**：公司研究、财报分析、同业比较，配套来源记录、可溯源计算和报告复核。
+## 两层秩序
 
-## 安装
+- **工作区层**：用 `AGENTS.md` 约定工作与交接方式，集中记录个人偏好、可复用方法和待处理问题。公共 Skill 提供流程与工具，个人材料留在自己的工作区。
+- **任务层**：简单问答直接完成；需要保存材料、分步执行或跨会话继续时，再建立任务目录。已有任务优先续做，新任务按类型选择提示词框架和文件模板。
 
-把下面这段话发给能读写本地文件、执行命令的 Agent：
+## 用什么框架承接任务
+
+Agent 按“工作区约定 → 任务流程 → 场景卡 → 本次任务定义”组织工作，把用户的一句话补成可执行的任务：
+
+> 要解决什么问题？范围和约束是什么？依据哪些材料与工具？交付什么？怎样算完成？何时停止，未决事项如何留下？
+
+这些内容写入任务定义：研究任务用 `request.md`，验证任务用 `spec.json`，并配套验收清单。Agent 负责填写和维护，用户只需交代目标。
+
+## 文件如何收纳
+
+以下为主要结构示意，具体任务会按类型增加文件：
+
+```text
+工作区/
+├── AGENTS.md                 # 工作区统一约定与导航
+├── memory/                   # 个人偏好、可复用资产索引
+├── playbooks.local/          # 个人方法与场景卡
+├── Inbox/issues/             # 待处理问题
+└── projects/<任务名>/        # 按需新建，一项任务一个目录
+    ├── README.md            # 当前进度、最近结果、下一步
+    ├── request.md 或 spec.json  # 目标、范围与完成条件
+    ├── inputs/              # 输入材料、任务配置与验收清单
+    ├── outputs/             # 执行记录、计算与检查结果
+    ├── deliverables/        # 最终交付物
+    ├── sources.md           # 来源索引
+    └── events.md            # 过程与变更记录
+```
+
+继续任务先读任务 README；执行中保留来源和旧结果；收尾时更新进度、缺口与下一步。现有项目的约定保持原位，Skill 在独立子目录中建立上述结构。
+
+当前配套流程支持**通用验证、API 测试和金融研究（公司、财报、同业）**，由统一的[资源目录](skills/task-harness/catalog.json)选择。金融数据使用已有授权工具或公开披露，复核检查记录与计算的一致性。
+
+## 安装与使用
+
+把这段话交给能读写本地文件、执行命令的 Agent（需要 Python 3.9+）：
 
 > 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.3.0/skills/task-harness 安装 task-harness。先读 INSTALL.md，安装到当前运行时的用户级技能目录，并确认安装成功。
 
-需要 Python 3.9+，无第三方 Python 依赖。也可下载 [技能 ZIP](https://github.com/abuttoncc/agent-taskkit/releases/download/v0.3.0/task-harness-0.3.0.zip) 交给 Agent 安装。
+装好后可以说：
 
-## 使用
+> 用 task-harness 开始这家公司的研究。沿用已有工作区约定，按需建任务目录，选好研究框架，保存材料、过程和报告，让下次能接着做。
 
-直接用自然语言交代任务，例如：
-
-> 用 task-harness 测试这个 API，检查返回数据是否符合要求，并保存过程。
-
-> 用 task-harness 分析这家公司最新财报，重点看利润质量和现金流，保留来源与报告。
-
-> 继续上次的研究，列出尚未验证的问题。
-
-金融数据由你已有的授权工具或公开披露提供；本包不含数据订阅。复核检查记录与计算的一致性，不保证投资结论正确。
-
-[详细安装与使用](skills/task-harness/INSTALL.md) · [资源目录](skills/task-harness/catalog.json) · [版本下载](https://github.com/abuttoncc/agent-taskkit/releases)
+[详细安装与使用](skills/task-harness/INSTALL.md) · [版本下载](https://github.com/abuttoncc/agent-taskkit/releases)
