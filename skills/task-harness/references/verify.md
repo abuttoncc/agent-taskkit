@@ -52,4 +52,6 @@ python3 PACKAGE/scripts/contract.py replay --root ROOT --report outputs/run-01-c
 
 ## 收尾
 
+输出目录不存在时按需建立；新建验证任务须显式选择 `--template verify`。
+
 交付结论、证据层级、适用边界、未解决 ID；再更新 README 的最近结果与下一步。来源记入 `sources.md`，按追加方式记录 `events.md`。不要为了全绿删除失败或降低验收条件。需要跨任务复用的材料先写入个人资产索引；当前只有一次发现的经验留在任务内。

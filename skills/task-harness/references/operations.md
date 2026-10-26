@@ -1,26 +1,42 @@
 # Agent 执行手册
 
-本页供执行任务的 Agent 使用，不要求用户手动操作。`PACKAGE` 替换成本 SKILL.md 所在目录，`INSTANCE` 是用户任务实例，`TASK` 是实例中的 `projects/<id>/`。路径带空格时按当前 shell 正确引用。需要 Python 3.9+ 标准库。
+由 Agent 执行，用户用自然语言交代目标。PACKAGE 是当前 Skill 目录，INSTANCE 是工作区，TASK 是任务路径；所有路径按当前 shell 正确引用。只需 Python 3.9+ 标准库。
 
-## 新建或继续
-
-```sh
-python3 PACKAGE/scripts/harness.py new --root INSTANCE --topic api-check --question '用户的具体问题'
-```
-
-已有实例可增加不同 topic；已有任务应继续它。外来目录或文件冲突时选新目录，不接管其他项目。生成文件只是 DRAFT：由 Agent 根据用户请求填写所选类型的任务定义和 expected CSV，不把空模板交回用户当作成果。
-
-实例生成器支持 verify/api 和 research/company、earnings、peers。未指定 --template 时保持兼容，创建 verify/api。金融研究由 Agent 选择场景后运行：
+## 工作区与任务
 
 ```sh
-python3 PACKAGE/scripts/harness.py new --root INSTANCE --template research --scene company --topic company-review --question '用户问题'
+python3 PACKAGE/scripts/harness.py init --root INSTANCE
+python3 PACKAGE/scripts/harness.py tasks --root INSTANCE
+python3 PACKAGE/scripts/harness.py new --root INSTANCE --topic brief --question '用户的具体目标'
 ```
 
-详细流程见 [验证流程](verify.md) 或 [研究流程](research.md)。研究任务使用 request.md、findings.md、review.md 和 inputs/research.json，不生成验证型 spec；不能对研究任务盲跑 contract.py freeze。需要冻结实验时另建 verify 任务。
+init 可单独使用；已有项目保留 AGENTS.md、CLAUDE.md、README.md 和个人文件，只补自己的入口。需要既有任务位置时 init 加 `--tasks-dir work/tasks`（相对 INSTANCE）。已初始化实例不可用此参数偷偷搬家。任务文件夹首次 new 时才出现。
 
-`run_command` 只是验证合同中的记录，不会被公共脚本自动执行。
+new 默认 **general/task**，只生成任务 README、request 和 task.json；非空外来目录须先明确 init，或选择允许的子目录。已有同名任务拒绝重建，先回读并续做。旧任务保留原类型和结构，不迁移。
 
-续做先读任务 README 的当前基线、最近结果与下一步；按 task.json 类型选 contract.py replay 或 research.py replay 检查后再继续，不盲目重跑付费或有副作用的请求。
+专门任务明确选择类型：
+
+```sh
+python3 PACKAGE/scripts/harness.py new --root INSTANCE --template verify --scene api --topic api-check --question '验证目标'
+python3 PACKAGE/scripts/harness.py new --root INSTANCE --template research --scene company --topic company-review --question '研究问题'
+```
+
+research 还支持 earnings、peers。详见 [验证](verify.md)、[研究](research.md)、[通用任务](general.md)。创建后仅为 DRAFT，Agent 要填写目标与完成条件再执行。inputs 等必要文件的父目录自动建立；outputs/deliverables 等空目录不预建，需要写文件时由 Agent 或相应脚本建立。
+
+## 留交接与续做
+
+```sh
+python3 PACKAGE/scripts/harness.py checkpoint --root INSTANCE --topic brief --status active --summary '已完成材料对照' --next '补齐方案并检查交付'
+python3 PACKAGE/scripts/harness.py checkpoint --root INSTANCE --topic brief --status blocked --summary '已有部分结果' --next '材料到齐后继续核对' --blocker '缺少附件；收到附件即可解除'
+python3 PACKAGE/scripts/harness.py checkpoint --root INSTANCE --topic brief --status done --summary '交付已完成' --deliverable deliverables/brief.md --review '按 request 的三项要求核对内容，并重新打开文件检查'
+python3 PACKAGE/scripts/harness.py handoff --root INSTANCE --topic brief
+```
+
+上面说明需替换为真实内容；不能为通过检查填示例话。`--deliverable` 可重复传入，路径相对 TASK；原位代码交付可引用任务内的交付说明和实际检查日志。done 至少需要非空交付文件、实查说明且无阻塞；unfinished 需要下一步，blocked 需要阻塞及解除条件。状态描述工作是否交付，与 API/研究的验收结论分开。
+
+每次 checkpoint 写新 handoffs/000001.json，绑定任务定义与交付文件的指纹，不覆盖旧快照。修改定义或交付后，旧快照会报变更；核对变更原因后保存下一版。`handoff` 无快照或指纹不符退出 1，格式或路径错误退出 2。检查不证明语义正确，也不能抵抗同时恶意改写记录与文件。
+
+tasks 只读任务文件生成总览，显示最新状态、下一步及交接问题，不重建另一份索引。多个可能的续做对象由 Agent 对照用户目标判断；不能确定才问。旧任务没有快照时显示 NO_HANDOFF，按原 README 续做，可在阶段结束时补第一份快照。
 
 ## 查看与体检
 
@@ -29,21 +45,17 @@ python3 PACKAGE/scripts/harness.py list
 python3 PACKAGE/scripts/harness.py doctor --root INSTANCE
 ```
 
-list 展示本包目录。doctor 是只读检查；DRAFT 合同或研究材料没填完整时会报 NEEDS_ATTENTION，应由 Agent 补完已知信息。授权、连通、生效没有实测就保持 unknown。检查通过不代表业务任务已完成。
+list 展示公共资源目录；tasks 展示本工作区任务。doctor 检查 general 交接、verify 合同或 research 记录；草稿显示未就绪。脚本检查、记录状态、业务结果是不同事实；授权、连通、生效没实测则为 unknown。脚本不执行任务合同里的 run_command。
 
 ## 安装与更新
 
-先识别当前 Agent 的用户级技能目录和原安装渠道。平台管理的插件使用平台自己的安装/更新机制，不在只读插件目录里运行自带更新器。
-
-独立文件夹安装可使用：
+先识别宿主用户级技能目录及原安装渠道。平台管理的插件沿用平台更新流程。
 
 ```sh
 python3 PACKAGE/scripts/install.py install --source PACKAGE --dest 用户级技能目录/task-harness
 python3 新包/scripts/install.py update --source 新包 --dest 用户级技能目录/task-harness
 ```
 
-不能把 ZIP 存在磁盘上就报告安装成功。确认目标下可读 SKILL.md 和目录资源，并检查当前运行时是否能发现这个 Skill；如运行时需要重载或重启，明确告知。文件复制、Agent 发现和真实任务通过分别报告。
+确认目标可读、当前运行时能发现 Skill；需要重载时告知。自带更新器只替换中央包，不扫描实例；目标必须由此安装器创建，有本地改动时拒绝覆盖。新包来源必须明确，hash 只说明字节一致，不代替来源信任。
 
-自带 update 只替换中央包，不扫描实例；目标必须由本安装器创建，中央包本地改过会拒绝覆盖。新包来源必须明确，hash 只能验证字节一致，不能代替来源可信性。非本安装器创建的包沿用其原渠道更新，不强行覆盖。
-
-跨机器后若实例入口中的公共包路径失效，修正该引用即可。依赖旧版的个人任务可使用独立版本目录，并记录版本与原因，不自动迁移冻结合同。
+v0.4 的 new 默认由 verify 改为 general，旧自动化需要显式加 `--template verify`。旧实例无 tasks_dir 时默认 projects，无需改任务文件；旧实例缺 WORKSPACE.md 也不自动重写其入口。跨机器时按原入口修正旧公共包路径；依赖旧版流程的任务可以保留独立版本，并记录原因。

@@ -46,6 +46,8 @@ class ResearchTest(unittest.TestCase):
         self.assertIn("inputs/source-example.json", result["evidence_fingerprints"])
 
     def test_three_scenes_and_legacy_api_share_an_instance(self):
+        (self.instance / "memory").mkdir(exist_ok=True)
+        (self.instance / "memory/profile.md").write_text("personal preferences")
         before = (self.instance / "memory/profile.md").read_bytes()
         for scene in ("company", "earnings", "peers"):
             harness.new(self.instance, scene, "financial question", "research", scene)
@@ -53,7 +55,7 @@ class ResearchTest(unittest.TestCase):
             self.assertTrue((task / "request.md").exists())
             self.assertFalse((task / "spec.json").exists())
             self.assertEqual(json.loads((task / "task.json").read_text())["scene"], scene)
-        harness.new(self.instance, "api", "API question")
+        harness.new(self.instance, "api", "API question", "verify")
         self.assertTrue((self.instance / "projects/api/spec.json").exists())
         self.assertEqual((self.instance / "memory/profile.md").read_bytes(), before)
         self.assertTrue(harness.doctor(self.instance)["errors"])

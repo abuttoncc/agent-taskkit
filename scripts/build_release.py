@@ -13,7 +13,8 @@ FILES = ["SKILL.md", "INSTALL.md", "catalog.json", "references/operations.md", "
          "scripts/finance.py", "scripts/research.py", "references/research.md", "references/finance-methods.md",
          "references/finance-company.md", "references/finance-earnings.md", "references/finance-peers.md",
          "assets/research/research.json", "assets/research/metrics.json", "assets/research/request.md",
-         "assets/research/findings.md", "assets/research/review.md", "assets/research/report.md"]
+         "assets/research/findings.md", "assets/research/review.md", "assets/research/report.md", "scripts/workspace.py", "references/workspace.md",
+         "references/general.md", "assets/general/request.md"]
 
 
 def build(output):

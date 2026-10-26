@@ -31,7 +31,7 @@ class ContractTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.instance = self.base / "instance"
-        harness.new(self.instance, "api-check", "Validate the fixture API")
+        harness.new(self.instance, "api-check", "Validate the fixture API", "verify")
         self.task = self.instance / "projects/api-check"
         spec = json.loads((self.task / "spec.json").read_text())
         spec.update(scope={"included": ["fixture"], "excluded": [], "population": "one fixture",
@@ -45,6 +45,7 @@ class ContractTest(unittest.TestCase):
             for ident, kind in (("main", "required"), ("question", "investigate"), ("excluded", "not_applicable")):
                 writer.writerow([ident, kind, "check", "fixture", "exact match"])
         self.frozen = contract.freeze_contract(self.task)
+        (self.task / "outputs").mkdir(exist_ok=True)
         (self.task / "outputs/evidence.txt").write_text("actual local test evidence")
 
     def save(self, name, value):
@@ -155,6 +156,7 @@ class ContractTest(unittest.TestCase):
 
     def test_new_task_preserves_personal_files(self):
         profile = self.instance / "memory/profile.md"
+        profile.parent.mkdir(parents=True, exist_ok=True)
         profile.write_text("personal preference")
         before = snapshot(self.instance)
         harness.new(self.instance, "second", "another task")
@@ -184,7 +186,7 @@ class ContractTest(unittest.TestCase):
         next_source = self.base / "next-package"
         shutil.copytree(PACKAGE, next_source)
         with (next_source / "references/api.md").open("a") as handle: handle.write("\nA documented update.\n")
-        info = json.loads((next_source / "catalog.json").read_text()); info["version"] = "0.3.1"
+        info = json.loads((next_source / "catalog.json").read_text()); info["version"] = "0.4.1"
         (next_source / "catalog.json").write_text(json.dumps(info))
         install.install(next_source, dest, update=True)
         self.assertEqual(snapshot(self.instance), before)

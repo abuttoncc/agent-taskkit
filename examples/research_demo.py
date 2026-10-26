@@ -40,6 +40,7 @@ def run(root, scene="company"):
         writer = csv.writer(handle)
         writer.writerow(["id", "requirement", "description", "basis", "acceptance"])
         writer.writerow(["financial-summary", "required", "增长与利润率", "示例任务", "来源明确、计算可重算、报告包含边界"])
+    (task / "deliverables").mkdir(exist_ok=True)
     (task / "deliverables/report-v1.md").write_text(f"""# Example Co 财务分析（合成示例）
 
 本报告全部使用虚构数据，不是对真实公司的研究或投资判断。

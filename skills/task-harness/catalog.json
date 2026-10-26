@@ -1,8 +1,30 @@
 {
   "schema": "ablemind.task-harness/v1",
   "name": "task-harness",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "templates": [
+    {
+      "name": "general",
+      "scenes": [
+        "task"
+      ],
+      "status": "preview",
+      "reference": "references/general.md",
+      "title": "通用任务与交接",
+      "use_when": [
+        "需要分步推进、交付文件或跨会话续做，且没有适用的专门流程"
+      ],
+      "scene_resources": {
+        "task": "references/general.md"
+      },
+      "assets": [
+        "assets/general/request.md"
+      ],
+      "scripts": [
+        "scripts/harness.py",
+        "scripts/workspace.py"
+      ]
+    },
     {
       "name": "verify",
       "scenes": [
@@ -81,6 +103,7 @@
   "shared": {
     "rules": "references/red-lines.md",
     "operations": "references/operations.md",
-    "installation": "INSTALL.md"
+    "installation": "INSTALL.md",
+    "workspace": "references/workspace.md"
   }
 }

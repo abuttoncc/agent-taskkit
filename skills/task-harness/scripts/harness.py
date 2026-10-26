@@ -9,6 +9,7 @@ import sys
 
 sys.dont_write_bytecode = True
 from contract import load_contract, read_spec, require
+import workspace
 
 PACKAGE = Path(__file__).resolve().parents[1]
 
@@ -17,7 +18,7 @@ def catalog():
     return json.loads((PACKAGE / "catalog.json").read_text(encoding="utf-8"))
 
 
-def new(root, topic, question, template="verify", scene=None):
+def new(root, topic, question, template="general", scene=None):
     options = {x["name"]: x for x in catalog()["templates"]}
     require(template in options, "unknown template")
     scene = scene or options[template]["scenes"][0]
@@ -25,39 +26,41 @@ def new(root, topic, question, template="verify", scene=None):
     require(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", topic), "topic must be kebab-case")
     require(question.strip(), "question cannot be empty")
     today = date.today().isoformat()
-    task = root / "projects" / topic
+    root = root.resolve()
     marker = root / ".task-harness.json"
     if root.exists() and any(root.iterdir()):
-        require(marker.is_file(), "nonempty directory is not a task-harness instance; choose another directory")
-        config = json.loads(marker.read_text(encoding="utf-8"))
-        require(config.get("schema") == "task-harness.instance/v1", "unknown instance schema")
-        require((root / "AGENTS.md").is_file(), "existing instance is missing AGENTS.md; repair it first")
+        require(marker.is_file(), "nonempty directory is not a task-harness instance; use init explicitly or choose another directory")
+    workspace_files, config = workspace.bootstrap(root)
+    directory = workspace.task_directory(root, config.get("tasks_dir", "projects"))
+    task = directory / topic
     require(not task.exists() and not task.is_symlink(), "task already exists; resume it or use a new topic")
     require(root in task.resolve().parents, "project path escapes instance")
+    prefix = str(task.relative_to(root))
+    definition = "spec.json" if template == "verify" else "request.md"
     files = {
-        f"projects/{topic}/task.json": json.dumps({"schema_version": 1, "template": template, "scene": scene,
-                                                 "created_with": catalog()["version"]}, ensure_ascii=False, indent=2) + "\n",
-        f"projects/{topic}/inputs/expected-v1.csv": (PACKAGE / "assets/verify/expected.csv").read_text(),
-        f"projects/{topic}/README.md": f"""# {topic}
+        f"{prefix}/task.json": json.dumps({"schema_version": 1, "template": template, "scene": scene,
+            "question": question, "created_at": today, "created_with": catalog()["version"]}, ensure_ascii=False, indent=2) + "\n",
+        f"{prefix}/README.md": f"""# {topic}
 
 问题：{question}
-状态：DRAFT，尚未形成可交付结论；根据本任务类型填写材料和验收清单。
-公共包出生版本：{catalog()['version']}；底座 {template}，场景 {scene}。
+入口：先读最新 handoffs/*.json（若无，任务尚未记录交接），再读 [{definition}]({definition})。
+新建状态：DRAFT；初始下一步：填写目标、范围、交付与完成条件。进度以最新交接为准。
+公共包出生版本：{catalog()['version']}；流程 {template}，场景 {scene}。
 公共流程：{options[template]['reference']}；场景卡：{options[template]['scene_resources'][scene]}（相对公共包）。
-任务定义：{"spec.json" if template == "verify" else "request.md 与 inputs/research.json"}；清单：[expected](inputs/expected-v1.csv)。
-当前基线：无。最近观测/对账：无。未完成项：尚未形成清单。
-下一步：{"填写 spec、清单后冻结基线" if template == "verify" else "填写 request、来源及验收清单，再采集材料、计算与复核"}。
-阻塞与解除条件：未记录；执行中据实更新。
-来源见 sources.md；进度见 events.md；交付物放 deliverables/。
+资料与结果按实际需要建立 inputs/、outputs/、deliverables/、tmp/；已有项目按其规则放置。
+需要追溯时补 sources.md；范围变更与重要决策记 events.md，不覆盖旧结果。
+交接时使用 checkpoint 留下摘要、下一步、阻塞和交付依据；同目标续做，不因换会话重建。
 """,
-        f"projects/{topic}/sources.md": "# 来源\n\n| ID | 来源/版本/日期 | 证据层级 | 本地证据 | 限制 |\n|---|---|---|---|---|\n",
-        f"projects/{topic}/events.md": f"# 事件（追加）\n\n- {today} CREATED：尚未冻结，尚未执行验证。\n",
     }
+    if template != "general":
+        files[f"{prefix}/inputs/expected-v1.csv"] = (PACKAGE / "assets/verify/expected.csv").read_text()
+        files[f"{prefix}/sources.md"] = "# 来源\n\n| ID | 来源/版本/日期 | 证据层级 | 本地证据 | 限制 |\n|---|---|---|---|---|\n"
+        files[f"{prefix}/events.md"] = f"# 事件（追加）\n\n- {today} CREATED：DRAFT，尚未执行。\n"
     if template == "verify":
         spec = json.loads((PACKAGE / "assets/verify/spec.json").read_text(encoding="utf-8"))
         spec.update(topic=topic, question=question, as_of=today, baseline=f"inputs/{today}-baseline-v1.json")
-        files[f"projects/{topic}/spec.json"] = json.dumps(spec, ensure_ascii=False, indent=2) + "\n"
-    else:
+        files[f"{prefix}/spec.json"] = json.dumps(spec, ensure_ascii=False, indent=2) + "\n"
+    elif template == "research":
         for name in ("request.md", "findings.md", "review.md", "report.md", "research.json", "metrics.json"):
             target = f"inputs/{name}" if name.endswith(".json") else "inputs/report-template.md" if name == "report.md" else name
             content = (PACKAGE / "assets/research" / name).read_text(encoding="utf-8")
@@ -67,65 +70,34 @@ def new(root, topic, question, template="verify", scene=None):
                 content = json.dumps(record, ensure_ascii=False, indent=2) + "\n"
             if name == "request.md":
                 content = content.replace("## 问题与对象", f"## 问题与对象\n\n{question}")
-            files[f"projects/{topic}/{target}"] = content
-    if not marker.exists():
-        files.update({
-            ".task-harness.json": json.dumps({"schema": "task-harness.instance/v1", "created_with": catalog()['version']}, indent=2) + "\n",
-            "AGENTS.md": f"""# 任务工作区 · TaskKit
-公共技能包：{PACKAGE}
-先读公共包 SKILL.md，再按任务 task.json 的类型和场景查 catalog.json。
-公共包独立升级，本目录文件出生后自治；迁移机器时修正上面的路径。
-| 现在要做什么 | 首先读 | 找什么证据 |
-|---|---|---|
-| 继续一项任务 | projects/<id>/README.md | 当前基线、最近结果、下一步与阻塞 |
-| 确认完成条件 | 任务 request.md 或 spec.json 与验收清单 | 范围、逐项判据、停止条件 |
-| 核对结论 | projects/<id>/outputs/ 与 sources.md | 对账、原始证据、证据层级 |
-| 了解个人习惯 | memory/profile.md | 当前偏好 |
-| 复用既有方法 | memory/assets.md 与 playbooks.local/ | 方法适用边界与来源 |
-| 留问题 | Inbox/issues/ | 实际/预期/复现/影响/临时处理/证据 |
-小问题直接答；不跨层宣布，不编数，不覆盖旧结果，不保存凭证。
-""",
-            "memory/profile.md": "# 个人偏好\n\n尚未记录。按用户实际偏好填写。\n",
-            "memory/assets.md": "# 个人资产索引\n\n| 问题 | 路径或技能入口 | 适用边界 | 验证日期 |\n|---|---|---|---|\n",
-        })
-    # Check every destination before creating anything. Never merge into foreign files.
-    for name in ("playbooks.local", "Inbox/issues", f"projects/{topic}/outputs", f"projects/{topic}/deliverables"):
-        target = root / name
-        require(root in target.resolve().parents, f"path escapes instance: {name}")
-        require(not target.exists() or target.is_dir(), f"directory conflicts with file: {name}")
-    for name in files:
-        target = root / name
-        require(root in target.resolve().parents, f"path escapes instance: {name}")
-        require(not target.exists() and not target.is_symlink(), f"file already exists: {name}")
-    for name in files:
-        target = root / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("x", encoding="utf-8") as handle:
-            handle.write(files[name])
-    for name in ("outputs", "deliverables"):
-        (task / name).mkdir()
-    for name in ("playbooks.local", "Inbox/issues"):
-        path = root / name
-        require(root in path.resolve().parents, f"path escapes instance: {name}")
-        path.mkdir(parents=True, exist_ok=True)
-    return {"task": str(task), "state": "DRAFT", "template": template, "scene": scene, "next": "Follow the selected workflow and fill the acceptance checklist."}
+            files[f"{prefix}/{target}"] = content
+    else:
+        files[f"{prefix}/request.md"] = (PACKAGE / "assets/general/request.md").read_text().replace("{{question}}", question)
+    files.update(workspace_files)
+    workspace.create_files(root, files)
+    return {"task": str(task), "state": "DRAFT", "template": template, "scene": scene,
+            "next": "Fill the task definition; create material folders only when needed."}
 
 
 def doctor(root):
     errors, tasks = [], []
-    for name in ("AGENTS.md", ".task-harness.json", "memory/profile.md", "memory/assets.md"):
-        if not (root / name).is_file():
-            errors.append(f"missing {name}")
-    marker = root / ".task-harness.json"
-    if marker.is_file():
-        require(json.loads(marker.read_text()).get("schema") == "task-harness.instance/v1", "unknown instance schema")
-    for task in sorted((root / "projects").iterdir()) if (root / "projects").is_dir() else []:
+    root = root.resolve()
+    config = workspace.config(root)
+    if not any((root / name).is_file() for name in ("AGENTS.md", "CLAUDE.md")):
+        errors.append("missing workspace rules entry")
+    directory = workspace.task_directory(root, config.get("tasks_dir", "projects"))
+    for task in sorted(directory.iterdir()) if directory.exists() else []:
         if not task.is_dir():
             continue
         try:
             require(root in task.resolve().parents, "task escapes instance")
-            info = json.loads((task / "task.json").read_text()) if (task / "task.json").exists() else {"template": "verify"}
-            require(isinstance(info, dict) and info.get("template") in {"verify", "research"}, "unknown task template")
+            info = workspace.metadata(task)
+            if info["template"] == "general":
+                review = workspace.handoff_check(task)
+                tasks.append({"topic": task.name, "template": "general", **review})
+                if review["issues"]:
+                    errors.append(f"{task.name}: {review['state']}")
+                continue
             if info["template"] == "research":
                 from research import check
                 review = check(task)
@@ -152,23 +124,49 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("list")
+    initialize = sub.add_parser("init")
+    initialize.add_argument("--root", type=Path, required=True)
+    initialize.add_argument("--tasks-dir", help="relative task directory, default projects")
+    for action in ("tasks", "handoff"):
+        command = sub.add_parser(action)
+        command.add_argument("--root", type=Path, required=True)
+        if action == "handoff":
+            command.add_argument("--topic", required=True)
+    save = sub.add_parser("checkpoint")
+    save.add_argument("--root", type=Path, required=True)
+    save.add_argument("--topic", required=True)
+    save.add_argument("--status", choices=("active", "blocked", "done"), required=True)
+    save.add_argument("--summary", required=True)
+    save.add_argument("--next", dest="next_step", default="")
+    save.add_argument("--blocker", default="")
+    save.add_argument("--deliverable", action="append", default=[])
+    save.add_argument("--review", default="")
     create = sub.add_parser("new")
     create.add_argument("--root", type=Path, required=True)
     create.add_argument("--topic", required=True)
     create.add_argument("--question", required=True)
-    create.add_argument("--template", choices=("verify", "research"), default="verify")
+    create.add_argument("--template", choices=tuple(x["name"] for x in catalog()["templates"]), default="general")
     create.add_argument("--scene", help="scene from catalog; defaults to the first scene of the selected template")
     inspect = sub.add_parser("doctor")
     inspect.add_argument("--root", type=Path, required=True)
     args = parser.parse_args()
     if args.action == "list":
         result = catalog()
+    elif args.action == "init":
+        result = workspace.init(args.root.resolve(), args.tasks_dir)
+    elif args.action == "tasks":
+        result = workspace.inventory(args.root.resolve())
+    elif args.action == "handoff":
+        result = workspace.handoff_check(workspace.task_path(args.root.resolve(), args.topic))
+    elif args.action == "checkpoint":
+        result = workspace.checkpoint(args.root.resolve(), args.topic, args.status, args.summary,
+                                      args.next_step, args.blocker, args.deliverable, args.review)
     elif args.action == "new":
         result = new(args.root.resolve(), args.topic, args.question, args.template, args.scene)
     else:
         result = doctor(args.root.resolve())
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 1 if result.get("errors") else 0
+    return 1 if result.get("errors") or result.get("issues") else 0
 
 
 if __name__ == "__main__":
