@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 RECEIPT = ".installed.json"
+PACKAGES = {"task-harness": "ablemind.task-harness/v1", "finance-research": "ablemind.finance-research/v1"}
 
 
 def require(condition, message):
@@ -36,11 +37,11 @@ def install(source, dest, update=False):
     require(source.is_dir(), "source package does not exist")
     require(source != dest and source not in dest.parents and dest not in source.parents, "source/destination overlap")
     hashes = files(source)
-    for name in ("SKILL.md", "catalog.json", "scripts/contract.py", "scripts/harness.py", "scripts/install.py",
-                 "references/red-lines.md", "references/verify.md", "references/api.md", "assets/verify/spec.json", "assets/verify/expected.csv"):
+    for name in ("SKILL.md", "catalog.json"):
         require(name in hashes, f"incomplete package: {name}")
     info = json.loads((source / "catalog.json").read_text(encoding="utf-8"))
-    require(info.get("name") == "task-harness" and info.get("schema") == "ablemind.task-harness/v1", "wrong package")
+    require(PACKAGES.get(info.get("name")) == info.get("schema"), "wrong package")
+    require(dest.name == info["name"], f"install into a directory named {info['name']} so runtimes and companions can find it")
     require(isinstance(info.get("version"), str) and info["version"], "package version missing")
     # A catalog entry must not advertise resources absent from the delivered package.
     references = list(info.get("shared", {}).values())
@@ -49,6 +50,7 @@ def install(source, dest, update=False):
         references.extend(template.get("scene_resources", {}).values())
         for field in ("assets", "scripts", "methods"):
             references.extend(template.get(field, []))
+    references.extend(info.get("files", []))
     for ref in references:
         require(isinstance(ref, str) and ref in hashes, f"catalog resource missing: {ref}")
     if update:
@@ -67,7 +69,7 @@ def install(source, dest, update=False):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source / name, target)
         require(files(stage) == hashes, "source changed while copying")
-        (stage / RECEIPT).write_text(json.dumps({"version": info["version"], "files": hashes}, indent=2) + "\n")
+        (stage / RECEIPT).write_text(json.dumps({"version": info["version"], "files": hashes}, indent=2) + "\n", encoding="utf-8")
         if update:
             dest.rename(backup)
         try:

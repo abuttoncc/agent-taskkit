@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 sys.dont_write_bytecode = True
@@ -131,6 +132,142 @@ class WorkspaceTest(unittest.TestCase):
         self.complete(task)
         (task / "request.md").write_text("Changed scope")
         self.assertEqual(workspace.handoff_check(task)["state"], "NEEDS_ATTENTION")
+
+    def test_control_files_are_not_deliverables(self):
+        task = self.start()
+        workspace.checkpoint(self.root, "brief", "active", "Outline ready", "Write plan")
+        for ref in ("request.md", "README.md", "task.json", "handoffs/000001.json"):
+            with self.assertRaises(ValueError):
+                workspace.checkpoint(self.root, "brief", "done", "Finished", deliverables=[ref], review="Checked")
+        self.assertEqual(len(workspace.snapshots(task)), 1)
+
+    def test_work_in_progress_edits_are_reported_without_flagging(self):
+        task = self.start()
+        workspace.checkpoint(self.root, "brief", "active", "Outline ready", "Write plan")
+        (task / "request.md").write_text("Scope clarified during work", encoding="utf-8")
+        review = workspace.handoff_check(task)
+        self.assertEqual(review["state"], "RECORDED")
+        self.assertEqual(review["changed_since_checkpoint"], ["request.md"])
+
+    def test_delivered_file_is_frozen_and_revision_uses_new_name(self):
+        task = self.start()
+        self.complete(task)
+        workspace.checkpoint(self.root, "brief", "active", "User requests a revision", "Write plan v2")
+        (task / "deliverables/plan.md").write_text("Overwritten in place", encoding="utf-8")
+        self.assertEqual(workspace.handoff_check(task)["state"], "NEEDS_ATTENTION")
+        before = snapshot(task / "handoffs")
+        with self.assertRaises(ValueError):
+            workspace.checkpoint(self.root, "brief", "active", "Still revising", "Finish v2")
+        self.assertEqual(snapshot(task / "handoffs"), before)
+        (task / "deliverables/plan.md").write_text("A synthetic plan for testing handoff integrity.")
+        (task / "deliverables/plan-v2.md").write_text("Revised plan", encoding="utf-8")
+        workspace.checkpoint(self.root, "brief", "done", "Plan v2 delivered", deliverables=["deliverables/plan-v2.md"],
+                             review="Compared v2 with the revision request and reopened the file.")
+        self.assertEqual(workspace.handoff_check(task)["state"], "RECORDED")
+
+    def test_lost_delivery_can_be_recorded_but_not_hidden(self):
+        task = self.start()
+        self.complete(task)
+        (task / "deliverables/plan.md").write_text("Overwritten before this rule existed", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            workspace.checkpoint(self.root, "brief", "active", "Revising", "Write v2", overwritten=["deliverables/plan.md"])
+        workspace.checkpoint(self.root, "brief", "active", "Revising", "Write v2",
+                             overwritten=["deliverables/plan.md"], reason="Original bytes not backed up")
+        self.assertEqual(workspace.handoff_check(task)["state"], "RECORDED")
+        latest = json.loads(workspace.snapshots(task)[-1].read_text(encoding="utf-8"))
+        self.assertEqual(latest["overwritten"]["deliverables/plan.md"]["reason"], "Original bytes not backed up")
+        (task / "deliverables/plan.md").write_text("Changed again", encoding="utf-8")
+        self.assertEqual(workspace.handoff_check(task)["state"], "NEEDS_ATTENTION")
+
+    def test_new_task_works_without_utf8_locale(self):
+        env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0"}
+        result = subprocess.run([sys.executable, "-B", "-X", "utf8=0", str(PACKAGE / "scripts/harness.py"), "new",
+                                 "--root", str(self.root), "--topic", "brief", "--question", "整理方案材料"],
+                                capture_output=True, text=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("整理方案材料", (self.root / "projects/brief/request.md").read_text(encoding="utf-8"))
+
+    def test_stop_hook_reminds_once_and_stays_quiet_elsewhere(self):
+        task = self.start()
+        payload = {"cwd": str(task), "session_id": f"test-{id(self)}"}
+        first = harness.stop_reminder(payload)
+        self.assertEqual(first["decision"], "block")
+        self.assertIn("brief", first["reason"])
+        self.assertIsNone(harness.stop_reminder(payload))
+        self.assertIsNone(harness.stop_reminder({**payload, "session_id": "other", "stop_hook_active": True}))
+        self.assertIsNone(harness.stop_reminder({**payload, "session_id": "later"}, now=time.time() + 2 * 86400))
+        self.assertIsNone(harness.stop_reminder({"cwd": str(self.base), "session_id": "elsewhere"}))
+        workspace.checkpoint(self.root, "brief", "active", "Outline ready", "Write plan")
+        self.assertIsNone(harness.stop_reminder({**payload, "session_id": "after-checkpoint"}))
+        result = subprocess.run([sys.executable, "-B", str(PACKAGE / "scripts/harness.py"), "hook"],
+                                input="not json", capture_output=True, text=True)
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+        config = json.loads(subprocess.run([sys.executable, "-B", str(PACKAGE / "scripts/harness.py"), "hook", "--print-config", "codex"],
+                                           capture_output=True, text=True).stdout)
+        self.assertIn("--event stop", config["hooks"]["Stop"][0]["hooks"][0]["command"])
+        self.assertIn("--event session-start", config["hooks"]["SessionStart"][0]["hooks"][0]["command"])
+
+    def test_session_brief_is_small_and_lists_unfinished_work(self):
+        self.assertIsNone(harness.session_brief({"cwd": str(self.base)}))
+        workspace.init(self.root, "work/tasks")
+        empty = harness.session_brief({"cwd": str(self.root)})["hookSpecificOutput"]
+        self.assertEqual(empty["hookEventName"], "SessionStart")
+        self.assertIn("work/tasks/", empty["additionalContext"])
+        self.assertEqual(empty["additionalContext"].count("\n"), 0)
+        harness.new(self.root, "brief", "Prepare a plan")
+        workspace.checkpoint(self.root, "brief", "active", "Outline ready", "Write the plan body")
+        for index in range(6):
+            harness.new(self.root, f"extra-{index}", "Another goal")
+        text = harness.session_brief({"cwd": str(self.root / "work")})["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Write the plan body", text)
+        self.assertIn("另有 2 项", text)
+        self.assertLess(len(text.encode("utf-8")), 2000)
+
+    def test_stop_window_comes_from_instance_config(self):
+        task = self.start()
+        marker = self.root / ".task-harness.json"
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        data["hook"] = {"stop_recent_hours": 1}
+        marker.write_text(json.dumps(data), encoding="utf-8")
+        payload = {"cwd": str(task), "session_id": f"window-{id(self)}"}
+        self.assertIsNone(harness.stop_reminder(payload, now=time.time() + 2 * 3600))
+        self.assertEqual(harness.stop_reminder(payload)["decision"], "block")
+        data["hook"] = {"stop_recent_hours": 0}
+        marker.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            harness.stop_reminder({**payload, "session_id": "bad-window"})
+
+    def test_stop_reminder_only_covers_tasks_this_session_named(self):
+        self.start()
+        harness.new(self.root, "other-work", "Owned by a concurrent session")
+        transcript = self.base / "session.jsonl"
+        transcript.write_text('{"tool":"Edit","file_path":"projects/brief/request.md"}\n', encoding="utf-8")
+        result = harness.stop_reminder({"cwd": str(self.root), "session_id": f"mine-{id(self)}", "transcript_path": str(transcript)})
+        self.assertIn("brief", result["reason"])
+        self.assertNotIn("other-work", result["reason"])
+        transcript.write_text("an unrelated question", encoding="utf-8")
+        self.assertIsNone(harness.stop_reminder({"cwd": str(self.root), "session_id": f"q-{id(self)}", "transcript_path": str(transcript)}))
+
+    def test_hook_root_option_reaches_a_subdirectory_instance(self):
+        project = self.base / "project"
+        self.root = project / "workspace"
+        self.start()
+        payload = {"cwd": str(project), "session_id": f"root-{id(self)}"}
+        self.assertIsNone(harness.session_brief(payload))
+        self.assertIn("brief", harness.session_brief(payload, self.root)["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(harness.stop_reminder(payload, root=self.root)["decision"], "block")
+        self.assertIsNone(harness.session_brief(payload, project))
+        command = [sys.executable, "-B", str(PACKAGE / "scripts/harness.py"), "hook", "--event", "session-start", "--root", str(self.root)]
+        result = subprocess.run(command, input=json.dumps(payload), capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["hookSpecificOutput"]["hookEventName"], "SessionStart")
+        config = harness.hook_config("claude", self.root)
+        self.assertIn(f"--root '{self.root.resolve()}'", config["hooks"]["Stop"][0]["hooks"][0]["command"])
+
+    def test_research_template_points_to_companion_skill(self):
+        with self.assertRaisesRegex(ValueError, "finance-research"):
+            harness.new(self.root, "company", "Study a company", "research")
+        self.assertFalse(self.root.exists())
 
     def test_paths_and_symlink_escapes_write_nothing(self):
         outside = self.base / "outside"

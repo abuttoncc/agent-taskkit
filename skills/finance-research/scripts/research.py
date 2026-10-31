@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check a research delivery's source links, calculations and acceptance coverage."""
+"""Create research tasks and check their source links, calculations and acceptance coverage."""
 import argparse
 import csv
 from datetime import date, datetime, timezone
@@ -8,8 +8,34 @@ from pathlib import Path
 import sys
 
 sys.dont_write_bytecode = True
-from contract import EXPECTED_FIELDS, REQUIREMENTS, RESULTS, fingerprint, nonempty, require, safe_path, write_new
+import taskharness  # noqa: F401  (puts task-harness scripts on sys.path)
+from contract import EXPECTED_FIELDS, REQUIREMENTS, RESULTS, fingerprint, nonempty, require, safe_path, utf8_argv, write_new
 from finance import verify_saved
+import workspace
+
+PACKAGE = Path(__file__).resolve().parents[1]
+SCENES = {"company": "references/finance-company.md", "earnings": "references/finance-earnings.md",
+          "peers": "references/finance-peers.md"}
+
+
+def new(root, topic, question, scene="company"):
+    require(scene in SCENES, "scene must be company, earnings or peers")
+    assets, today = PACKAGE / "assets/research", date.today().isoformat()
+    files = {}
+    for name in ("request.md", "findings.md", "review.md"):
+        files[name] = (assets / name).read_text(encoding="utf-8")
+    files["request.md"] = files["request.md"].replace("## 问题与对象", f"## 问题与对象\n\n{question}", 1)
+    files["inputs/report-template.md"] = (assets / "report.md").read_text(encoding="utf-8")
+    files["inputs/metrics.json"] = (assets / "metrics.json").read_text(encoding="utf-8")
+    files["inputs/expected-v1.csv"] = (assets / "expected.csv").read_text(encoding="utf-8")
+    record = json.loads((assets / "research.json").read_text(encoding="utf-8"))
+    record["as_of"] = today
+    files["inputs/research.json"] = json.dumps(record, ensure_ascii=False, indent=2) + "\n"
+    files.update(workspace.ledgers(today))
+    version = json.loads((PACKAGE / "catalog.json").read_text(encoding="utf-8"))["version"]
+    guide = f"研究流程：finance-research 包 references/research.md；场景卡：{SCENES[scene]}。"
+    return workspace.new_task(root, topic, question, "research", scene, files, guide,
+                              {"created_by": f"finance-research {version}"})
 
 
 def check(root):
@@ -138,13 +164,21 @@ def check(root):
 
 
 def main():
+    utf8_argv()
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=("check", "replay"))
-    p.add_argument("--root", type=Path, required=True)
+    p.add_argument("action", choices=("new", "check", "replay"))
+    p.add_argument("--root", type=Path, required=True, help="task directory; for new, the workspace")
+    p.add_argument("--topic")
+    p.add_argument("--question")
+    p.add_argument("--scene", default="company", choices=tuple(SCENES))
     p.add_argument("--out", help="new task-relative outputs/*.json for check")
     p.add_argument("--report", help="saved report for replay")
     args = p.parse_args()
     root = args.root.resolve()
+    if args.action == "new":
+        require(args.topic and args.question and not args.out and not args.report, "new needs --topic and --question")
+        print(json.dumps(new(root, args.topic, args.question, args.scene), ensure_ascii=False, indent=2))
+        return 0
     if args.action == "check":
         require(args.out and not args.report, "check requires --out only")
         out = safe_path(root, args.out)

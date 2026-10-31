@@ -1,17 +1,39 @@
 """Workspace initialization, derived task inventory and append-only handoffs."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 
-from contract import fingerprint, nonempty, require, safe_path, write_new
+from contract import fingerprint, nonempty, replay, require, safe_path, write_new
 
 PACKAGE = Path(__file__).resolve().parents[1]
 MARKER = ".task-harness.json"
+TOPIC = r"[a-z0-9]+(?:-[a-z0-9]+)*"
+CONTROL_FILES = {("task.json",), ("README.md",), ("request.md",), ("spec.json",)}
 
 
 def catalog():
     return json.loads((PACKAGE / "catalog.json").read_text(encoding="utf-8"))
+
+
+def template_info(name):
+    """Built-in templates plus task types owned by companion skills (e.g. research)."""
+    data = catalog()
+    for item in data["templates"]:
+        if item["name"] == name:
+            return item
+    extension = data.get("extensions", {}).get(name) if isinstance(name, str) else None
+    require(extension is not None, "unknown task template")
+    return {"name": name, **extension}
+
+
+def definition_file(template):
+    return template_info(template).get("definition", "request.md")
+
+
+def ledgers(today):
+    return {"sources.md": "# 来源\n\n| ID | 来源/版本/日期 | 证据层级 | 本地证据 | 限制 |\n|---|---|---|---|---|\n",
+            "events.md": f"# 事件（追加）\n\n- {today} CREATED：DRAFT，尚未执行。\n"}
 
 
 def task_directory(root, name):
@@ -101,8 +123,45 @@ def init(root, tasks_dir=None):
             "created": list(files), "existing_files": "preserved"}
 
 
+def new_task(root, topic, question, template, scene, files, guide, origin=None):
+    """Create a task; callers supply template-specific files relative to the task directory."""
+    require(isinstance(topic, str) and re.fullmatch(TOPIC, topic), "topic must be kebab-case")
+    require(nonempty(question), "question cannot be empty")
+    info = template_info(template)
+    root = root.resolve()
+    if root.exists() and any(root.iterdir()):
+        require((root / MARKER).is_file(), "nonempty directory is not a task-harness instance; use init explicitly or choose another directory")
+    workspace_files, data = bootstrap(root)
+    task = task_directory(root, data.get("tasks_dir", "projects")) / topic
+    require(not task.exists() and not task.is_symlink(), "task already exists; resume it or use a new topic")
+    require(root in task.resolve().parents, "project path escapes instance")
+    prefix, version = task.relative_to(root).as_posix(), catalog()["version"]
+    definition = definition_file(template)
+    record = {"schema_version": 1, "template": template, "scene": scene, "question": question,
+              "created_at": date.today().isoformat(), "created_with": version, **(origin or {})}
+    closing = f"\n收尾：done 前先生成检查报告（{info['report']}），checkpoint 时用 --report 引用。" if info.get("report") else ""
+    planned = {f"{prefix}/task.json": json.dumps(record, ensure_ascii=False, indent=2) + "\n",
+               f"{prefix}/README.md": f"""# {topic}
+
+问题：{question}
+入口：先读最新 handoffs/*.json（若无，任务尚未记录交接），再读 [{definition}]({definition})。
+新建状态：DRAFT；初始下一步：填写目标、范围、交付与完成条件。进度以最新交接为准。
+公共包出生版本：task-harness {version}；流程 {template}，场景 {scene}。
+{guide}
+资料与结果按实际需要建立 inputs/、outputs/、deliverables/、tmp/；已有项目按其规则放置。
+需要追溯时补 sources.md；范围变更与重要决策记 events.md，不覆盖旧结果。
+交接时使用 checkpoint 留下摘要、下一步、阻塞和交付依据；同目标续做，不因换会话重建。
+已交付文件不原位改写，修订另存新文件名。{closing}
+"""}
+    planned.update({f"{prefix}/{name}": content for name, content in files.items()})
+    planned.update(workspace_files)
+    create_files(root, planned)
+    return {"task": str(task), "state": "DRAFT", "template": template, "scene": scene,
+            "next": "Fill the task definition; create material folders only when needed."}
+
+
 def task_path(root, topic):
-    require(isinstance(topic, str) and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", topic), "topic must be kebab-case")
+    require(isinstance(topic, str) and re.fullmatch(TOPIC, topic), "topic must be kebab-case")
     directory = task_directory(root, config(root).get("tasks_dir", "projects"))
     task = safe_path(root, str((directory / topic).relative_to(root)))
     require(task.is_dir(), "task not found")
@@ -116,7 +175,7 @@ def metadata(task):
         return {"template": "verify", "legacy": True}
     data = json.loads(path.read_text(encoding="utf-8"))
     require(isinstance(data, dict) and data.get("schema_version") == 1, "unknown task schema")
-    require(data.get("template") in {x["name"] for x in catalog()["templates"]}, "unknown task template")
+    template_info(data.get("template"))
     return data
 
 
@@ -146,14 +205,61 @@ def validate_handoff(task, data):
         require(data.get("deliverables"), "done task needs a deliverable (text answers may be saved to a file)")
     refs = data.get("deliverables")
     require(isinstance(refs, list) and all(nonempty(p) for p in refs), "deliverables must be paths")
+    for ref in refs:
+        parts = safe_path(task, ref).relative_to(task.resolve()).parts
+        require(parts[0] != "handoffs" and parts not in CONTROL_FILES, f"{ref} is a task control file, not a deliverable")
     hashes = data.get("evidence_fingerprints")
     require(isinstance(hashes, dict) and hashes, "handoff needs evidence fingerprints")
-    definition = "spec.json" if metadata(task)["template"] == "verify" else "request.md"
+    definition = definition_file(metadata(task)["template"])
+    report = data.get("report")
+    require(report is None or (nonempty(report) and report in hashes), "handoff report must be a fingerprinted path")
     require({definition, *refs} <= hashes.keys(), "handoff does not bind its definition and deliverables")
-    for name, saved in hashes.items():
-        path = safe_path(task, name)
-        require(path.is_file() and path.stat().st_size > 0, f"missing or empty handoff evidence: {name}")
-        require(fingerprint(path) == saved, f"handoff evidence changed: {name}; save a new checkpoint")
+
+
+def check_report(task, template, ref):
+    """A done verify/research task cites the checker's saved report; FAIL is a valid finished outcome."""
+    pattern = template_info(template)["report"]
+    require(nonempty(ref), f"done {template} task needs --report {pattern}; run the checker first")
+    path = safe_path(task, ref)
+    relative = PurePosixPath(path.relative_to(task.resolve()).as_posix())
+    require(len(relative.parts) == len(PurePosixPath(pattern).parts) and relative.match(pattern), f"report must match {pattern}")
+    require(path.is_file(), f"report not found: {ref}")
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    require(isinstance(saved, dict) and saved.get("assessment") in {"PASS", "PARTIAL", "FAIL"}, "report lacks an assessment")
+    if template == "verify":
+        replay(task, ref)
+    hashes = saved.get("evidence_fingerprints")
+    require(isinstance(hashes, dict) and hashes, "report lacks evidence fingerprints; regenerate it with the checker")
+    for name, value in hashes.items():
+        require(matches(task, name, value), f"report evidence changed since the check: {name}; run the checker again")
+    return saved["assessment"]
+
+
+def matches(task, name, saved):
+    path = safe_path(task, name)
+    return path.is_file() and path.stat().st_size > 0 and fingerprint(path) == saved
+
+
+def frozen_deliveries(task, paths, pending=None):
+    """Files delivered by any done snapshot stay byte-identical; revisions use new names."""
+    problems, records = [], [json.loads(p.read_text(encoding="utf-8")) for p in paths]
+    labels = [p.name for p in paths]
+    if pending is not None:
+        records.append(pending)
+        labels.append("this checkpoint")
+    for index, data in enumerate(records):
+        if not isinstance(data, dict) or data.get("status") != "done":
+            continue
+        for ref in data.get("deliverables", []):
+            current = safe_path(task, ref)
+            current = fingerprint(current) if current.is_file() else None
+            accepted = any(isinstance(x, dict) and x.get("overwritten", {}).get(ref, {}).get("now") == current
+                           for x in records[index + 1:])
+            message = (f"delivered file changed after {labels[index]}: {ref}; restore it and save the revision under a new name, "
+                       f"or record the loss with checkpoint --overwritten {ref} --reason ...")
+            if not accepted and not matches(task, ref, data["evidence_fingerprints"].get(ref)) and message not in problems:
+                problems.append(message)
+    return problems
 
 
 def handoff_check(task):
@@ -161,33 +267,55 @@ def handoff_check(task):
     if not paths:
         return {"state": "NO_HANDOFF", "issues": ["No checkpoint; read the task README and definition."]}
     data = json.loads(paths[-1].read_text(encoding="utf-8"))
+    changed = []
     try:
         validate_handoff(task, data)
-        issues = []
+        changed = [name for name, saved in data["evidence_fingerprints"].items() if not matches(task, name, saved)]
+        issues = frozen_deliveries(task, paths)
+        record_changes = [name for name in changed if name not in data["deliverables"]]
+        if data["status"] == "done" and record_changes:
+            issues.append(f"changed after delivery: {', '.join(record_changes)}; record the scope change in events.md and save a new checkpoint")
     except (ValueError, OSError, KeyError, TypeError) as exc:
         issues = [str(exc)]
     return {"state": "NEEDS_ATTENTION" if issues else "RECORDED", "recorded_status": data.get("status") if isinstance(data, dict) else None,
             "handoff": str(paths[-1].relative_to(task)), "summary": data.get("summary") if isinstance(data, dict) else None,
             "next_step": data.get("next_step") if isinstance(data, dict) else None,
             "blocker": data.get("blocker") if isinstance(data, dict) else None, "issues": issues,
+            "changed_since_checkpoint": changed, "assessment": data.get("assessment") if isinstance(data, dict) else None,
             "claim_limit": "Recorded handoff completeness and file integrity only; no semantic or outcome assessment."}
 
 
-def checkpoint(root, topic, status, summary, next_step="", blocker="", deliverables=(), review=""):
+def checkpoint(root, topic, status, summary, next_step="", blocker="", deliverables=(), review="", overwritten=(), reason="",
+               report=None):
     task = task_path(root, topic)
-    info = metadata(task)
+    template = metadata(task)["template"]
     refs = list(deliverables)
-    definition = "spec.json" if info["template"] == "verify" else "request.md"
+    definition = definition_file(template)
+    has_checker = bool(template_info(template).get("report"))
+    require(not report or has_checker, f"{template} tasks have no checker report")
+    assessment = check_report(task, template, report) if report or (status == "done" and has_checker) else None
     evidence = {}
-    for ref in [definition, *refs]:
+    for ref in [definition, *refs, *([report] if report else [])]:
         path = safe_path(task, ref)
         require(path.is_file() and path.stat().st_size > 0, f"missing or empty handoff evidence: {ref}")
         evidence[ref] = fingerprint(path)
     data = {"schema_version": 1, "created_at": datetime.now(timezone.utc).isoformat(), "status": status,
             "summary": summary, "next_step": next_step, "blocker": blocker, "deliverables": refs,
             "review": review, "evidence_fingerprints": evidence}
+    if report:
+        data.update(report=report, assessment=assessment)
     validate_handoff(task, data)
     paths = snapshots(task)
+    if overwritten:
+        require(nonempty(reason), "--overwritten needs --reason explaining why the delivered bytes cannot be restored")
+        lost = {}
+        for ref in overwritten:
+            path = safe_path(task, ref)
+            lost[ref] = {"now": fingerprint(path) if path.is_file() else None, "reason": reason}
+        data["overwritten"] = lost
+    problems = frozen_deliveries(task, paths, data)
+    if problems:
+        raise ValueError(problems[0])
     sequence = int(paths[-1].stem) + 1 if paths else 1
     require(sequence <= 999999, "handoff sequence exhausted")
     target = safe_path(task, f"handoffs/{sequence:06d}.json")

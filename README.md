@@ -25,13 +25,13 @@
 
 需要时再增加 `inputs/`、`outputs/`、`deliverables/` 和来源记录；交接快照放 `handoffs/`。任务总览从实际记录生成。个人偏好与方法也按需积累，公共包升级不覆盖它们。
 
-内置**通用任务、API 验证、金融研究（公司、财报、同业）**三类流程，从同一个[资源目录](skills/task-harness/catalog.json)按需选用。其他具体能力交给环境中已有工具。
+`task-harness` 内置**通用任务与 API 验证**两类流程，从[资源目录](skills/task-harness/catalog.json)按需选用。金融研究（公司、财报、同业）是独立的 [`finance-research`](skills/finance-research/SKILL.md)，建在同一工作区、用同一套交接；不做金融研究可以不装。其他具体能力交给环境中已有工具。
 
 ## 安装与使用
 
 把这段话交给能读写本地文件、执行命令的 Agent（Python 3.9+，无第三方 Python 依赖）：
 
-> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.4.0/skills/task-harness 安装 task-harness。先读 INSTALL.md，安装到当前运行时的用户级技能目录，并确认安装成功。
+> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.0/skills/task-harness 安装 task-harness。先读 INSTALL.md，安装到当前运行时的用户级技能目录，并确认安装成功。
 
 装好后可以说：
 
@@ -41,6 +41,8 @@
 
 > 看看这个工作区有哪些未完成任务，从上次的下一步继续。
 
-检查器核对交接字段、文件完整性及专门流程的记录；内容质量由 Agent 实际核验。它没有后台服务或强制 hook。
+检查器核对交接字段、文件完整性及专门流程的记录；内容质量由 Agent 实际核验。已交付文件不能原位改写，修订另存新版本。默认没有后台服务或 hook；需要时可加可选的会话 hook：开场注入任务简报，结束前提醒一次未交接的任务（见[执行手册](skills/task-harness/references/operations.md)）。长期接入以项目入口文档里的一段指引为主，hook 只做补充。
+
+需要金融研究时，再把同一版本的 `skills/finance-research` 装到 task-harness 旁边（同一个用户级技能目录）。
 
 [详细安装与使用](skills/task-harness/INSTALL.md) · [工作区规则](skills/task-harness/references/workspace.md) · [版本下载](https://github.com/abuttoncc/agent-taskkit/releases)

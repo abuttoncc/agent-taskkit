@@ -1,0 +1,55 @@
+{
+  "schema": "ablemind.finance-research/v1",
+  "name": "finance-research",
+  "version": "0.5.0",
+  "requires": {
+    "task-harness": ">=0.5.0",
+    "python": ">=3.9",
+    "packages": []
+  },
+  "templates": [
+    {
+      "name": "research",
+      "scenes": [
+        "company",
+        "earnings",
+        "peers"
+      ],
+      "status": "preview",
+      "reference": "references/research.md",
+      "title": "金融研究：公司、财报与同业比较",
+      "use_when": [
+        "研究一家公司的业务、财务、竞争位置与关键风险",
+        "分析财报变化、业绩质量、预期差与验证指标",
+        "在统一口径下比较同业公司"
+      ],
+      "scene_resources": {
+        "company": "references/finance-company.md",
+        "earnings": "references/finance-earnings.md",
+        "peers": "references/finance-peers.md"
+      },
+      "methods": [
+        "references/finance-methods.md"
+      ],
+      "assets": [
+        "assets/research/request.md",
+        "assets/research/findings.md",
+        "assets/research/review.md",
+        "assets/research/report.md",
+        "assets/research/research.json",
+        "assets/research/metrics.json",
+        "assets/research/expected.csv"
+      ],
+      "scripts": [
+        "scripts/research.py",
+        "scripts/finance.py",
+        "scripts/taskharness.py"
+      ]
+    }
+  ],
+  "distribution": {
+    "mode": "bundled",
+    "update_source": "https://github.com/abuttoncc/agent-taskkit/releases",
+    "repository": "https://github.com/abuttoncc/agent-taskkit"
+  }
+}

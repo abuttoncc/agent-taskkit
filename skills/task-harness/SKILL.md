@@ -1,41 +1,58 @@
 ---
 name: task-harness
-description: 建立工作区约定，按需组织任务文件与提示词框架，接续任务、记录交接和检查交付。用于初始化工作区、需要分步推进或留存成果的新任务、继续旧任务、查看任务与模板；简单问答无需建档。配套通用任务、API 验证和金融研究流程。
+description: 给工作区建立任务秩序：按需建任务目录与提示词框架，接续旧任务，用交接快照记录状态、下一步和交付，已交付文件不被原位改写。用于初始化工作区、需要分步推进或留存成果的新任务、继续上次的任务、查看未完成任务、API 与明确承诺的验证；简单问答无需建档。金融研究另用 finance-research。
 ---
 
 # Task Harness
 
-给 Agent 一套工作秩序：先识别工作区规则与已有任务，再选流程、按需建档，执行后留下可接续的交付。用户交代目标，你负责选资源、填写材料和运行脚本，不要求用户学习目录术语或手填 JSON/CSV。
+先认工作区规则与已有任务，再按需建档，执行后留下可接续的交接。用户只交代目标；你选流程、填材料、跑脚本，不要求用户学目录术语或手填 JSON/CSV。
 
-## 先定位，再行动
+TH 是本 Skill 目录，INSTANCE 是工作区，TOPIC 是 kebab-case 任务名。命令从任意目录运行，路径按当前 shell 引用。
 
-读 [工作区秩序](references/workspace.md)，明确当前项目入口、可写范围和已有文件约定。用户指定路径优先；不把项目规则写到共享父目录，不扫描其他用户工作区。
+## 先定位
 
-- 简单问答、单次查证、小修改直接完成，不因用了工具而建档。
-- 同目标同交付优先继续已有任务；日期、工具或会话变化不新开。先读任务 README、最新交接及任务定义，只展开相关材料。
-- 新的独立目标需要分步推进、保留成果或跨会话续做时，才建任务。按工作区既有规则选位置；需要 TaskKit 结构时用 init/new。
-- 用户只想建立工作区秩序，可以独立 init，无需虚构第一项任务。已有规则保留，只补自己的入口；成熟的非 TaskKit 任务借用框架，不强制迁移。
+读当前项目生效的 AGENTS.md/CLAUDE.md 与 WORKSPACE.md，确认可写范围和已有约定。用户指定路径优先；不把项目规则写到共享父目录，不扫描其他用户的工作区。
 
-## 按需选择框架
-
-读 [资源目录](catalog.json)，匹配 templates 的 use_when；只读所选 reference、scene_resources，涉及计算再读 methods。公共规则按 shared.rules 定位。
-
-| 本次工作 | 选用资源 |
+| 情况 | 动作 |
 |---|---|
-| 通用任务、资料整理、方案或工程交付 | general/task：目标、约束、材料、步骤、交付、完成与停止条件 |
-| 明确承诺的验证、API 测试 | verify/api：spec、验收清单、冻结、观察与对账 |
-| 公司研究、财报分析、同业比较 | research 对应场景：范围、来源、判断、计算与复核，不强制冻结 |
+| 简单问答、单次查证、小修改 | 直接做，不建档 |
+| 已有任务的补充、修订、下一阶段 | 续做原任务；换日、换会话不新建 |
+| 新的独立目标，要分步推进或留存成果 | 新建任务，有关联时在 request 中引用旧任务 |
+| 已有成熟目录与任务入口 | 沿用原规则，只借本框架，不搬家 |
 
-没有专门场景时使用通用框架，具体能力由现有工具或其他 Skill 承担，不冒称本包内置了它们。视频制作暂不在本包实现。
+## 核心命令
 
-根据对话与已有材料填写任务定义，只问会影响结果或授权的缺失信息。个人偏好和方法按相关索引读取，保留适用边界；工具能力依据当前环境实际自述，不因为未登记而禁用，也不臆测已授权或连通。
+```sh
+python3 TH/scripts/harness.py tasks --root INSTANCE          # 总览：最新状态、下一步、需关注项
+python3 TH/scripts/harness.py init  --root INSTANCE          # 只建立秩序；已有规则保留，可加 --tasks-dir 相对目录
+python3 TH/scripts/harness.py new   --root INSTANCE --topic TOPIC --question '用户的具体目标'
+python3 TH/scripts/harness.py checkpoint --root INSTANCE --topic TOPIC --status active --summary '已完成…' --next '下一步…'
+python3 TH/scripts/harness.py checkpoint --root INSTANCE --topic TOPIC --status blocked --summary '…' --next '…' --blocker '缺什么；什么条件解除'
+python3 TH/scripts/harness.py checkpoint --root INSTANCE --topic TOPIC --status done --summary '…' --deliverable deliverables/x.md --review '实际做过的检查'
+```
 
-## 执行与交接
+- new 默认 general，生成 README.md、request.md、task.json。创建后是 DRAFT：先按 request 的五节填目标、范围、材料、交付、完成与停止条件，再执行。
+- 验证类任务加 `--template verify`，流程见 [验证](references/verify.md)；done 时还要 `--report outputs/<run>-comparison.json`。
+- 说明要写真实内容，不能为通过检查填示例话。done 需要非空交付文件、实查说明、无阻塞；控制文件（request/README/task.json/handoffs）不算交付。
 
-脚本命令见 [执行手册](references/operations.md)。通用任务只生成最小入口，输入、输出、来源、个人资产等按实际需要增加；专门任务生成它所需的材料。公共脚本不复制进任务，更新不覆盖个人文件。
+## 交接规则
 
-执行后按本次完成条件检查交付，保留失败与旧版本。阶段结束或阻塞时用 checkpoint 写摘要、下一步、阻塞及解除条件、交付物与实查说明；tasks 提供派生总览，handoff 检查最新交接及引用文件。检查器不判断内容语义，done 不等于验证对象 PASS。
+- 阶段结束、阻塞或交付时存 checkpoint，快照追加到 handoffs/，最新一份就是当前入口。
+- 进行中改 request 或草稿属正常，tasks 只列出变动。
+- **已交付文件冻结。** done 之后可以回到 active 继续，但交付过的文件不能原位改；修订另存新文件名（report-v2.md）。原字节确实找不回时，用 `--overwritten 路径 --reason 原因` 记入新快照，不能悄悄覆盖。
+- done 之后又改了任务定义，要在 events.md 记范围变化，再存新快照。
+- 检查器只核对字段与文件指纹，不判断内容语义。验证对象 FAIL 也可以是一项完成的交付，不要把"任务结束"说成"对象通过"。
 
-给用户结论与可用的交付入口，收尾记录保持简短。经验先留任务，确认适用性后再放个人方法；公共规则只吸收经过脱敏、可复现且有必要的改进，不自动回传个人材料。
+## 按需读
 
-安装与更新读 [安装与使用](INSTALL.md)。资源随包分发，无在线资源服务或后台调度；只承诺交互式使用，运行时是否自动发现本 Skill 需实际确认。
+| 什么时候 | 读哪里 |
+|---|---|
+| 填 general 任务的 request | [通用任务框架](references/general.md) |
+| 初始化已有项目、个人偏好与方法放哪 | [工作区秩序](references/workspace.md) |
+| API 测试、验证承诺 | [验证](references/verify.md)、[API 场景卡](references/api.md) |
+| 体检、安装与更新、可选会话 hook | [执行手册](references/operations.md) |
+| 报告结论前 | [五条红线](references/red-lines.md) |
+
+公司研究、财报分析、同业比较用 finance-research Skill 创建任务，交接仍用这里的 checkpoint。具体取数、成稿等能力交给环境中已有的工具或 Skill，不冒称本包内置了它们。
+
+给用户结论与交付入口，收尾记录保持简短。经验先留在任务里，确认可复用后再放进个人方法；不自动把个人材料回传公共 Skill。

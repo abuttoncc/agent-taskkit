@@ -1,4 +1,4 @@
-# 验证底座 v0.1
+# 通用验证与 API 测试
 
 实例只放个人材料和任务。公共流程、脚本不复制进实例。`ROOT` 是某一个任务目录，例如 `/work/projects/api-check`；下面所有证据、输入和输出路径均相对该目录，命令的执行位置不影响解释。
 
@@ -54,4 +54,4 @@ python3 PACKAGE/scripts/contract.py replay --root ROOT --report outputs/run-01-c
 
 输出目录不存在时按需建立；新建验证任务须显式选择 `--template verify`。
 
-交付结论、证据层级、适用边界、未解决 ID；再更新 README 的最近结果与下一步。来源记入 `sources.md`，按追加方式记录 `events.md`。不要为了全绿删除失败或降低验收条件。需要跨任务复用的材料先写入个人资产索引；当前只有一次发现的经验留在任务内。
+交付结论、证据层级、适用边界、未解决 ID；再用 checkpoint 交接，done 时 `--report` 引用本轮 comparison 报告，脚本会先 replay 它。来源记入 `sources.md`，按追加方式记录 `events.md`。不要为了全绿删除失败或降低验收条件。需要跨任务复用的材料先写入个人资产索引；当前只有一次发现的经验留在任务内。

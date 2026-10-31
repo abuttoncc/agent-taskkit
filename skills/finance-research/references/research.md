@@ -7,10 +7,10 @@
 由 Agent 新建 `research` 任务，填写 request.md：对象与市场、信息截止日、报告期、要回答的问题、交付形式、验收标准和停止条件。当前问题能直接回答时无需建档。已有材料足够就继续，只有影响结论的信息缺口才询问用户。
 
 ```sh
-python3 PACKAGE/scripts/harness.py new --root INSTANCE --template research --scene company --topic company-review --question '用户问题'
+python3 FR/scripts/research.py new --root INSTANCE --scene company --topic company-review --question '用户问题'
 ```
 
-scene 可选 company、earnings、peers。同一实例可以同时保存 API 和研究任务；根据每个任务的 task.json 定位类型。旧 verify 任务无需迁移。
+FR 是本 Skill 目录，INSTANCE 是 task-harness 工作区，TASK 是任务目录。scene 可选 company、earnings、peers。任务建在工作区的任务目录里，总览、交接和交付冻结都由 task-harness 管；同一实例可同时保存 API 和研究任务，旧研究任务无需迁移。
 
 Agent 根据本轮目标填写 `inputs/expected-v1.csv`。列为 `id,requirement,description,basis,acceptance`，requirement 为 required/investigate/not_applicable。研究流程不强制冻结；有事前对照实验要求时另建 verify 子任务，不把事后研究伪装成事前验证。任务范围变化需留事件和前版材料；用新 expected-v2.csv，并让 research.json 的 expected 字段指向它（省略时默认 inputs/expected-v1.csv）。不能为了通过检查删除未完成承诺。
 
@@ -36,9 +36,9 @@ Agent 根据本轮目标填写 `inputs/expected-v1.csv`。列为 `id,requirement
 按 request 和 expected 写 `deliverables/report-v1.md`，可从 inputs/report-template.md 起稿。复核时更新 review.md，以及 research.json 的 review。复核记录必须描述实际检查，不能只因文件存在就标通过。
 
 ```sh
-python3 PACKAGE/scripts/finance.py --root TASK --input inputs/metrics.json --out outputs/calculations-01.json
-python3 PACKAGE/scripts/research.py check --root TASK --out outputs/research-review-01.json
-python3 PACKAGE/scripts/research.py replay --root TASK --report outputs/research-review-01.json
+python3 FR/scripts/finance.py --root TASK --input inputs/metrics.json --out outputs/calculations-01.json
+python3 FR/scripts/research.py check --root TASK --out outputs/research-review-01.json
+python3 FR/scripts/research.py replay --root TASK --report outputs/research-review-01.json
 ```
 
 退出码 0 为本地记录检查 PASS；1 为已输出的 PARTIAL/FAIL；2 为格式、路径、来源引用或重算不一致。输出必须用新名字，replay 不修改旧报告。没有计算时 calculation_files 可为空；有缺失计算的交付允许解释后给出部分结论，检查仍保留 PARTIAL。
@@ -77,4 +77,10 @@ review 的 ID 对应 expected；required 有 FAIL 总评 FAIL；缺项、待核�
 
 ## 继续与交付
 
-先读任务 README、request、findings 与最近复核；确认来源是否仍满足时点，再补缺项。改报告写新版本，保留旧结果。交付核心判断、证据、计算和关键限制；再用 checkpoint 保存交接，旧任务也可沿用 README 的结果与下一步。个人偏好和方法进入本实例，真实研究材料不提交到公共技能仓库。
+先读任务 README、request、findings 与最近复核；确认来源是否仍满足时点，再补缺项。改报告写新版本，保留旧结果。交付核心判断、证据、计算和关键限制，再用 task-harness 的 checkpoint 保存交接。done 必须引用最新检查报告：
+
+```sh
+python3 TH/scripts/harness.py checkpoint --root INSTANCE --topic company-review --status done --summary '报告已交付' --deliverable deliverables/report-v1.md --report outputs/research-review-01.json --review '实际做过的复核'
+```
+
+TH 是 task-harness 目录。报告结论为 PARTIAL 或 FAIL 也可以 done，结论会记进快照；报告生成后证据又被改动则拒绝，需重跑检查。旧任务也可沿用 README 的结果与下一步。个人偏好和方法进入本实例，真实研究材料不提交到公共技能仓库。

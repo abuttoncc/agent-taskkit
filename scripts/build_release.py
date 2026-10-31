@@ -7,26 +7,34 @@ from pathlib import Path
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "skills/task-harness"
-FILES = ["SKILL.md", "INSTALL.md", "catalog.json", "references/operations.md", "scripts/contract.py", "scripts/harness.py", "scripts/install.py",
-         "references/red-lines.md", "references/verify.md", "references/api.md", "assets/verify/spec.json", "assets/verify/expected.csv",
-         "scripts/finance.py", "scripts/research.py", "references/research.md", "references/finance-methods.md",
-         "references/finance-company.md", "references/finance-earnings.md", "references/finance-peers.md",
-         "assets/research/research.json", "assets/research/metrics.json", "assets/research/request.md",
-         "assets/research/findings.md", "assets/research/review.md", "assets/research/report.md", "scripts/workspace.py", "references/workspace.md",
-         "references/general.md", "assets/general/request.md"]
+COMMON = ["SKILL.md", "catalog.json"]
+PACKAGES = {
+    "task-harness": COMMON + ["INSTALL.md", "references/operations.md", "references/red-lines.md", "references/verify.md",
+                              "references/api.md", "references/workspace.md", "references/general.md",
+                              "scripts/contract.py", "scripts/harness.py", "scripts/install.py", "scripts/workspace.py",
+                              "assets/verify/spec.json", "assets/verify/expected.csv", "assets/general/request.md"],
+    "finance-research": COMMON + ["references/research.md", "references/finance-methods.md", "references/finance-company.md",
+                                  "references/finance-earnings.md", "references/finance-peers.md",
+                                  "scripts/research.py", "scripts/finance.py", "scripts/taskharness.py",
+                                  "assets/research/research.json", "assets/research/metrics.json", "assets/research/request.md",
+                                  "assets/research/findings.md", "assets/research/review.md", "assets/research/report.md",
+                                  "assets/research/expected.csv"],
+}
 
 
-def build(output):
-    version = json.loads((PACKAGE / "catalog.json").read_text())["version"]
-    output.mkdir(parents=True, exist_ok=True)
-    target = output / f"task-harness-{version}.zip"
+def build_one(name, files, output):
+    package = ROOT / "skills" / name
+    version = json.loads((package / "catalog.json").read_text(encoding="utf-8"))["version"]
+    actual = {p.relative_to(package).as_posix() for p in package.rglob("*") if p.is_file() and "__pycache__" not in p.parts}
+    if actual != set(files):
+        raise ValueError(f"{name}: release list differs from package: {sorted(actual ^ set(files))}")
+    target = output / f"{name}-{version}.zip"
     with ZipFile(target, "x", compression=ZIP_DEFLATED) as archive:
-        for name in FILES:
-            source = PACKAGE / name
-            if source.is_symlink() or PACKAGE not in source.resolve().parents:
-                raise ValueError(f"invalid release input: {name}")
-            info = ZipInfo(f"task-harness/{name}", date_time=(1980, 1, 1, 0, 0, 0))
+        for item in files:
+            source = package / item
+            if source.is_symlink() or package not in source.resolve().parents:
+                raise ValueError(f"invalid release input: {name}/{item}")
+            info = ZipInfo(f"{name}/{item}", date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = ZIP_DEFLATED
             info.create_system = 3
             info.external_attr = 0o100644 << 16
@@ -34,8 +42,13 @@ def build(output):
     with ZipFile(target) as archive:
         assert archive.testzip() is None
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
-    target.with_suffix(".zip.sha256").write_text(f"{digest}  {target.name}\n")
-    return {"package": str(target), "files": len(FILES), "sha256": digest}
+    target.with_suffix(".zip.sha256").write_text(f"{digest}  {target.name}\n", encoding="utf-8")
+    return {"package": str(target), "files": len(files), "sha256": digest}
+
+
+def build(output):
+    output.mkdir(parents=True, exist_ok=True)
+    return [build_one(name, files, output) for name, files in PACKAGES.items()]
 
 
 if __name__ == "__main__":

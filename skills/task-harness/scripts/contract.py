@@ -7,6 +7,7 @@ import csv
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -15,6 +16,11 @@ from pathlib import Path
 EXPECTED_FIELDS = {"id", "requirement", "description", "basis", "acceptance"}
 REQUIREMENTS = {"required", "investigate", "not_applicable"}
 RESULTS = {"PASS", "FAIL", "PARTIAL", "SKIP", "NOT_RUN"}
+
+
+def utf8_argv():
+    """Under a C/POSIX locale argv arrives surrogate-escaped; shells still send UTF-8 bytes."""
+    sys.argv = [os.fsencode(arg).decode("utf-8") for arg in sys.argv]
 
 
 def require(condition, message):

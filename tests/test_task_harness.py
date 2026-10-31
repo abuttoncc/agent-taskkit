@@ -16,6 +16,7 @@ sys.path.insert(0, str(PACKAGE / "scripts"))
 import contract
 import harness
 import install
+import workspace
 
 
 def snapshot(root):
@@ -178,6 +179,20 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(result["errors"], [])
         self.assertEqual(result["capabilities"]["effective"], "unknown")
         self.assertEqual(snapshot(self.instance), before)
+
+    def test_done_verify_needs_replayable_comparison(self):
+        (self.task / "deliverables").mkdir()
+        (self.task / "deliverables/summary.md").write_text("Fixture API summary", encoding="utf-8")
+        args = dict(deliverables=["deliverables/summary.md"], review="Compared the summary with the comparison report.")
+        with self.assertRaisesRegex(ValueError, "--report"):
+            workspace.checkpoint(self.instance, "api-check", "done", "Delivered", **args)
+        report = contract.compare_observations(self.task, self.observed())
+        contract.write_new(self.task / "outputs/run-01-comparison.json", report)
+        result = workspace.checkpoint(self.instance, "api-check", "done", "Delivered", report="outputs/run-01-comparison.json", **args)
+        self.assertEqual(result["assessment"], report["assessment"])
+        (self.task / "outputs/evidence.txt").write_text("tampered", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            workspace.checkpoint(self.instance, "api-check", "done", "Again", report="outputs/run-01-comparison.json", **args)
 
     def test_install_update_preserves_instance_and_refuses_modified_package(self):
         dest = self.base / "installed/task-harness"

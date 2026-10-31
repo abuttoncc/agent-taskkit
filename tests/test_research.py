@@ -9,12 +9,15 @@ import unittest
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "skills/task-harness"
+PACKAGE = ROOT / "skills/finance-research"
+HARNESS = ROOT / "skills/task-harness"
+sys.path.insert(0, str(HARNESS / "scripts"))
 sys.path.insert(0, str(PACKAGE / "scripts"))
 import finance
 import harness
 import install
 import research
+import workspace
 
 spec = importlib.util.spec_from_file_location("research_demo", ROOT / "examples/research_demo.py")
 demo = importlib.util.module_from_spec(spec)
@@ -50,7 +53,7 @@ class ResearchTest(unittest.TestCase):
         (self.instance / "memory/profile.md").write_text("personal preferences")
         before = (self.instance / "memory/profile.md").read_bytes()
         for scene in ("company", "earnings", "peers"):
-            harness.new(self.instance, scene, "financial question", "research", scene)
+            research.new(self.instance, scene, "financial question", scene)
             task = self.instance / "projects" / scene
             self.assertTrue((task / "request.md").exists())
             self.assertFalse((task / "spec.json").exists())
@@ -61,11 +64,13 @@ class ResearchTest(unittest.TestCase):
         self.assertTrue(harness.doctor(self.instance)["errors"])
 
     def test_unknown_template_or_scene_writes_nothing(self):
-        for template, scene in (("produce", None), ("research", "api"), ("verify", "company")):
-            root = self.base / "invalid"
+        root = self.base / "invalid"
+        for template, scene in (("produce", None), ("research", None), ("verify", "company")):
             with self.subTest(template=template, scene=scene), self.assertRaises(ValueError):
                 harness.new(root, "test", "question", template, scene)
             self.assertFalse(root.exists())
+        with self.assertRaises(ValueError): research.new(root, "test", "question", "api")
+        self.assertFalse(root.exists())
 
     def test_nonpositive_base_is_not_reported_as_growth(self):
         for value in ("0", "-100"):
@@ -152,7 +157,38 @@ class ResearchTest(unittest.TestCase):
         shutil.copytree(PACKAGE, source)
         (source / "scripts/finance.py").unlink()
         with self.assertRaisesRegex(ValueError, "catalog resource missing"):
-            install.install(source, self.base / "installed")
+            install.install(source, self.base / "installed/finance-research")
+
+    def test_done_research_needs_a_current_check_report(self):
+        (self.task / "handoffs").mkdir(exist_ok=True)
+        args = dict(deliverables=["deliverables/report-v1.md"], review="Reopened report and compared numbers with the sources.")
+        with self.assertRaisesRegex(ValueError, "--report"):
+            workspace.checkpoint(self.instance, "example-finance", "done", "Report delivered", **args)
+        with self.assertRaisesRegex(ValueError, "must match"):
+            workspace.checkpoint(self.instance, "example-finance", "done", "Report delivered", report="outputs/calculations-01.json", **args)
+        result = workspace.checkpoint(self.instance, "example-finance", "done", "Report delivered",
+                                      report="outputs/research-review-01.json", **args)
+        self.assertEqual((result["state"], result["assessment"]), ("RECORDED", "PASS"))
+        (self.task / "findings.md").write_text("Edited after the check", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "run the checker again"):
+            workspace.checkpoint(self.instance, "example-finance", "done", "Again", report="outputs/research-review-01.json", **args)
+
+    def test_skills_installed_side_by_side_find_each_other(self):
+        skills = self.base / "skills"
+        install.install(HARNESS, skills / "task-harness")
+        install.install(PACKAGE, skills / "finance-research")
+        command = [sys.executable, "-B", str(skills / "finance-research/scripts/research.py"), "new", "--root",
+                   str(self.base / "other"), "--topic", "peer-check", "--question", "Compare two synthetic peers", "--scene", "peers"]
+        result = subprocess.run(command, capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        task = json.loads((self.base / "other/projects/peer-check/task.json").read_text(encoding="utf-8"))
+        self.assertEqual((task["template"], task["scene"]), ("research", "peers"))
+        alone = self.base / "alone"
+        install.install(PACKAGE, alone / "finance-research")
+        result = subprocess.run(command[:2] + [str(alone / "finance-research/scripts/research.py")] + command[3:],
+                                capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("task-harness not found", result.stderr)
 
 
 if __name__ == "__main__":

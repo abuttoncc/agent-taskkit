@@ -10,7 +10,7 @@ Task Harness 是一个 Skill，包含工作区约定、任务框架、场景卡�
 
 也可以直接把下面这段交给你的 Agent：
 
-> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.4.0/skills/task-harness 安装 task-harness 到你当前运行时的用户级技能目录。先读安装说明，完成后确认你能发现这个 Skill，并列出当前可用模板。
+> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.0/skills/task-harness 安装 task-harness 到你当前运行时的用户级技能目录。先读安装说明，完成后确认你能发现这个 Skill，并列出当前可用模板。
 
 把本技能 ZIP 附给支持文件读写和本地命令的 Agent，或给它 ZIP 的本地路径，再说：
 
@@ -37,11 +37,17 @@ Task Harness 是一个 Skill，包含工作区约定、任务框架、场景卡�
 
 第一次可以明确提到技能名；后续是否自动匹配由宿主 Agent 决定。Agent 负责选资源、填任务定义、运行脚本与解释结果。只有必要信息缺失时才询问你。
 
-当前包含工作区初始化、通用任务、任务总览与交接检查，以及通用验证、API 测试，以及金融研究的公司研究、财报分析和同业比较。视频制作由其他工具承接，不在本包实现。
+当前包含工作区初始化、通用任务、任务总览与交接检查、通用验证与 API 测试。金融研究（公司研究、财报分析、同业比较）拆为 `finance-research`，需要时装到 task-harness 同级目录：
+
+> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.0/skills/finance-research 安装 finance-research，放在 task-harness 旁边的同一个用户级技能目录，并确认它能找到 task-harness。
+
+两个包都用 task-harness 自带的安装器：`python3 task-harness包/scripts/install.py install --source 要装的包 --dest 技能目录/<包名>`。目标目录名必须与包名一致。视频制作由其他工具承接，不在本包实现。
+
+可选会话 hook（开场简报、结束前提醒）默认不装。用户同意后，按执行手册用 `harness.py hook --print-config claude|codex` 生成片段，合并进已有配置，不覆盖原有 hooks。长期接入时，在项目入口文档里写一段指引更可靠。
 
 ## 发布者怎么分发
 
-当前产物是可单独分发的 Skill ZIP。可把经过审查的固定版本 ZIP 放在自己的公开仓库 Release 或下载页；页面只需说明用途、下载入口、上述安装提示词和一句使用示例。安装提示词中的附件/来源必须是真实包，不发布未替换的示例网址。
+当前产物是两个可单独分发的 Skill ZIP（task-harness 与 finance-research，后者依赖前者）。可把经过审查的固定版本 ZIP 放在自己的公开仓库 Release 或下载页；页面只需说明用途、下载入口、上述安装提示词和一句使用示例。安装提示词中的附件/来源必须是真实包，不发布未替换的示例网址。
 
 面向有插件目录的客户端，可进一步将同一个 Skill 包装进插件，让用户点击安装。插件负责分发和宿主接入，Skill 继续负责任务方法与资源选择。
 

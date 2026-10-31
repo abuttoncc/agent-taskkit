@@ -8,16 +8,16 @@ from pathlib import Path
 import sys
 
 sys.dont_write_bytecode = True
-PACKAGE = Path(__file__).resolve().parents[1] / "skills/task-harness"
-sys.path.insert(0, str(PACKAGE / "scripts"))
+SKILLS = Path(__file__).resolve().parents[1] / "skills"
+sys.path.insert(0, str(SKILLS / "finance-research/scripts"))
+import taskharness  # noqa: F401
 from contract import write_new
 import finance
-import harness
 import research
 
 
 def run(root, scene="company"):
-    harness.new(root, "example-finance", "分析合成示例公司的收入增长与利润率；不使用真实证券数据。", "research", scene)
+    research.new(root, "example-finance", "分析合成示例公司的收入增长与利润率；不使用真实证券数据。", scene)
     task = root / "projects/example-finance"
     today = date.today().isoformat()
     def save(name, data):

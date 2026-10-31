@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 sys.dont_write_bytecode = True
+import taskharness  # noqa: F401  (puts task-harness scripts on sys.path)
 from contract import fingerprint, nonempty, require, safe_path, write_new
 
 FORMULAS = {
