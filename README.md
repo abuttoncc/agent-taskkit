@@ -4,6 +4,8 @@
 
 安装名为 `task-harness`。公共 Skill 提供流程、提示词框架与脚本；个人规则、材料和任务留在自己的工作区。
 
+0.5.1 修复并行会话的交接提醒串任务：Stop 只检查明确绑定到当前会话的任务，未知归属时放行；新建与 checkpoint 可自动绑定，续做使用 `bind`。开场简报不注入其他任务的下一步。
+
 ## 怎么工作
 
 1. **先认工作区**：读已有规则与入口。可以先初始化工作区，不必虚构任务；已有文件和目录约定保留。
@@ -31,7 +33,7 @@
 
 把这段话交给能读写本地文件、执行命令的 Agent（Python 3.9+，无第三方 Python 依赖）：
 
-> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.0/skills/task-harness 安装 task-harness。先读 INSTALL.md，安装到当前运行时的用户级技能目录，并确认安装成功。
+> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.1/skills/task-harness 安装 task-harness。先读 INSTALL.md，安装到当前运行时的用户级技能目录，并确认安装成功。
 
 装好后可以说：
 

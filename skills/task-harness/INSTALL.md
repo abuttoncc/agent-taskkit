@@ -10,7 +10,7 @@ Task Harness 是一个 Skill，包含工作区约定、任务框架、场景卡�
 
 也可以直接把下面这段交给你的 Agent：
 
-> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.0/skills/task-harness 安装 task-harness 到你当前运行时的用户级技能目录。先读安装说明，完成后确认你能发现这个 Skill，并列出当前可用模板。
+> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.1/skills/task-harness 安装 task-harness 到你当前运行时的用户级技能目录。先读安装说明，完成后确认你能发现这个 Skill，并列出当前可用模板。
 
 把本技能 ZIP 附给支持文件读写和本地命令的 Agent，或给它 ZIP 的本地路径，再说：
 
@@ -39,7 +39,7 @@ Task Harness 是一个 Skill，包含工作区约定、任务框架、场景卡�
 
 当前包含工作区初始化、通用任务、任务总览与交接检查、通用验证与 API 测试。金融研究（公司研究、财报分析、同业比较）拆为 `finance-research`，需要时装到 task-harness 同级目录：
 
-> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.0/skills/finance-research 安装 finance-research，放在 task-harness 旁边的同一个用户级技能目录，并确认它能找到 task-harness。
+> 请从 https://github.com/abuttoncc/agent-taskkit/tree/v0.5.1/skills/finance-research 安装 finance-research，放在 task-harness 旁边的同一个用户级技能目录，并确认它能找到 task-harness。
 
 两个包都用 task-harness 自带的安装器：`python3 task-harness包/scripts/install.py install --source 要装的包 --dest 技能目录/<包名>`。目标目录名必须与包名一致。视频制作由其他工具承接，不在本包实现。
 

@@ -1,7 +1,7 @@
 {
   "schema": "ablemind.finance-research/v1",
   "name": "finance-research",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "requires": {
     "task-harness": ">=0.5.0",
     "python": ">=3.9",
