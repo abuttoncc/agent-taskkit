@@ -20,6 +20,8 @@ TH 是本 Skill 目录，INSTANCE 是工作区，TOPIC 是 kebab-case 任务名�
 | 新的独立目标，要分步推进或留存成果 | 新建任务，有关联时在 request 中引用旧任务 |
 | 已有成熟目录与任务入口 | 沿用原规则，只借本框架，不搬家 |
 
+实际续做任务时，用 `harness.py bind --root INSTANCE --topic TOPIC --session-id 当前会话ID` 绑定本会话；会话ID取 SessionStart 上下文或运行时环境。`new` / `checkpoint` 在可用的运行时会话环境下自动绑定。只读任务总览或参考其他任务不绑定。绑定只记录参与关系，不改变任务身份、定义或交付状态。
+
 ## 核心命令
 
 ```sh

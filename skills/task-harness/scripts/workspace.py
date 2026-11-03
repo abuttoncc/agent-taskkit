@@ -1,6 +1,8 @@
 """Workspace initialization, derived task inventory and append-only handoffs."""
 from datetime import date, datetime, timezone
+import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 
@@ -156,6 +158,8 @@ def new_task(root, topic, question, template, scene, files, guide, origin=None):
     planned.update({f"{prefix}/{name}": content for name, content in files.items()})
     planned.update(workspace_files)
     create_files(root, planned)
+    if runtime_session_id():
+        bind_session(root, topic)
     return {"task": str(task), "state": "DRAFT", "template": template, "scene": scene,
             "next": "Fill the task definition; create material folders only when needed."}
 
@@ -166,6 +170,36 @@ def task_path(root, topic):
     task = safe_path(root, str((directory / topic).relative_to(root)))
     require(task.is_dir(), "task not found")
     return task
+
+
+def runtime_session_id():
+    return next((os.environ[name] for name in ("CODEX_THREAD_ID", "CODEX_SESSION_ID", "CLAUDE_SESSION_ID")
+                 if os.environ.get(name, "").strip()), None)
+
+
+def session_directory(root, session_id):
+    require(nonempty(session_id), "session_id is required; pass --session-id or use a runtime session environment")
+    key = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
+    return safe_path(root.resolve(), f".task-harness-sessions/{key}")
+
+
+def bind_session(root, topic, session_id=None):
+    """Record participation, not task status; one marker per session/task avoids shared-file races."""
+    task = task_path(root, topic)
+    session_id = runtime_session_id() if session_id is None else session_id
+    directory = session_directory(root, session_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    marker = directory / topic
+    require(not marker.is_symlink(), "session binding cannot be a symlink")
+    marker.touch(exist_ok=True)
+    return {"task": str(task), "session_id": session_id, "binding": "recorded"}
+
+
+def session_tasks(root, session_id):
+    """Only explicit associations are authoritative; transcripts and task mtimes cannot assign work."""
+    directory = session_directory(root, session_id)
+    return sorted(p.name for p in directory.iterdir()
+                  if re.fullmatch(TOPIC, p.name) and p.is_file() and not p.is_symlink()) if directory.is_dir() else []
 
 
 def metadata(task):
@@ -316,6 +350,8 @@ def checkpoint(root, topic, status, summary, next_step="", blocker="", deliverab
     problems = frozen_deliveries(task, paths, data)
     if problems:
         raise ValueError(problems[0])
+    if runtime_session_id():
+        bind_session(root, topic)
     sequence = int(paths[-1].stem) + 1 if paths else 1
     require(sequence <= 999999, "handoff sequence exhausted")
     target = safe_path(task, f"handoffs/{sequence:06d}.json")

@@ -1,7 +1,7 @@
 {
   "schema": "ablemind.task-harness/v1",
   "name": "task-harness",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "templates": [
     {
       "name": "general",

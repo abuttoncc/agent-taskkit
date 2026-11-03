@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shlex
 import sys
 import tempfile
 import time
@@ -96,25 +97,6 @@ def instance_root(payload, root=None):
     return next((p for p in (start, *start.parents) if (p / workspace.MARKER).is_file()), None)
 
 
-def mentioned(transcript, needles):
-    """Which needles occur in the session transcript; None when the runtime gave no readable transcript."""
-    if not isinstance(transcript, str) or not transcript:
-        return None
-    try:
-        path = Path(transcript)
-        if not path.is_file():
-            return None
-        found, tail, width = set(), b"", max(len(n.encode()) for n in needles) if needles else 0
-        with path.open("rb") as handle:
-            for block in iter(lambda: handle.read(1 << 20), b""):
-                window = tail + block
-                found.update(n for n in needles if n.encode() in window)
-                tail = window[-width:] if width else b""
-        return found
-    except OSError:
-        return None
-
-
 def recent_hours(root):
     value = workspace.config(root).get("hook", {}).get("stop_recent_hours", RECENT_HOURS)
     require(isinstance(value, (int, float)) and not isinstance(value, bool) and 1 <= value <= 720,
@@ -122,13 +104,11 @@ def recent_hours(root):
     return value
 
 
-def clip(text, limit=110):
-    text = " ".join(str(text or "").split())
-    return text if len(text) <= limit else text[:limit - 1] + "…"
-
-
 def session_brief(payload, root=None):
-    """SessionStart context: where tasks live, how to record them, and what is unfinished. Kept small on purpose."""
+    """SessionStart context: where tasks live, and the names of unfinished tasks.
+
+    This hook runs before the user message, so it must not inject another task's next step.
+    """
     if not isinstance(payload, dict):
         return None
     root = instance_root(payload, root)
@@ -138,40 +118,46 @@ def session_brief(payload, root=None):
     script = Path(__file__).resolve()
     lines = [f"[task-harness] 需要跨会话推进或留存成果的工作，在 {root / tasks_dir}/<任务名>/ 建档并在阶段结束时 checkpoint；"
              f"简单问答不建档。命令：python3 '{script}' tasks|new|checkpoint --root '{root}'；规则见 '{PACKAGE / 'SKILL.md'}'。"]
+    session_id = payload.get("session_id")
+    if isinstance(session_id, str) and session_id.strip():
+        lines.append(f"实际新建或续做任务后，执行 python3 '{script}' bind --root '{root}' --topic <任务名> "
+                     f"--session-id {shlex.quote(session_id)} 绑定本会话；new/checkpoint 在运行时提供会话环境时自动绑定。"
+                     "只读总览或参考其他任务不绑定，Stop 仅检查已绑定任务。")
     rows = [r for r in workspace.inventory(root)["tasks"]
             if r.get("state") in {"NEEDS_ATTENTION", "NO_HANDOFF"} or r.get("recorded_status") != "done"]
     rows.sort(key=lambda r: (r.get("state") != "NEEDS_ATTENTION", r.get("recorded_status") != "blocked", r["topic"]))
-    for row in rows[:BRIEF_TASKS]:
-        status = row.get("recorded_status") or "未交接"
-        detail = row["issues"][0] if row.get("state") == "NEEDS_ATTENTION" else row.get("blocker") or row.get("next_step") or row.get("question")
-        lines.append(f"- {row['topic']}（{status}{'，需关注' if row.get('state') == 'NEEDS_ATTENTION' else ''}）：{clip(detail)}")
-    if len(rows) > BRIEF_TASKS:
-        lines.append(f"- 另有 {len(rows) - BRIEF_TASKS} 项未完成，用 tasks 查看。")
     if rows:
-        lines.append("续做同一目标先读该任务 README 与最新 handoffs/，不要另起新任务；别的会话在做的任务不要替它写 checkpoint。")
+        shown = [r["topic"] for r in rows[:BRIEF_TASKS]]
+        extra = f"；另有 {len(rows) - len(shown)} 项" if len(rows) > len(shown) else ""
+        lines.append(
+            f"未完成 {len(rows)} 项：{'、'.join(shown)}{extra}。"
+            "续做其中一项时，先读该任务 README 与最新 handoffs/，不要另起新任务。"
+            "不要把未点名的任务当成当前目标，也不要替其他会话写 checkpoint。"
+        )
     return {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "\n".join(lines)}}
 
 
 def stop_reminder(payload, now=None, root=None):
-    """Optional Stop hook: remind once per session about this session's recently touched tasks whose records need attention.
-
-    When the runtime passes transcript_path, only tasks named in this session's transcript count, so a session
-    is never pushed to checkpoint work that another concurrent session owns."""
+    """Remind only for explicitly bound tasks; unknown session ownership always passes."""
     if not isinstance(payload, dict) or payload.get("stop_hook_active"):
         return None
     root = instance_root(payload, root)
-    if root is None:
+    session_id = payload.get("session_id")
+    if root is None or not isinstance(session_id, str) or not session_id.strip():
         return None
     cutoff = (now or time.time()) - recent_hours(root) * 3600
-    rows = [r for r in workspace.inventory(root)["tasks"]
-            if r.get("state") in {"NEEDS_ATTENTION", "NO_HANDOFF"} and touched_since(root / r["path"], cutoff)]
-    seen = mentioned(payload.get("transcript_path"), [r["path"] for r in rows])
-    if seen is not None:
-        rows = [r for r in rows if r["path"] in seen]
-    pending = [f"- {r['topic']}：{r['issues'][0]}" for r in rows]
+    pending = []
+    for topic in workspace.session_tasks(root, session_id):
+        try:
+            task = workspace.task_path(root, topic)
+        except (OSError, ValueError):
+            continue  # A removed task must not suppress reminders for other bound work.
+        row = workspace.handoff_check(task)
+        if row.get("state") in {"NEEDS_ATTENTION", "NO_HANDOFF"} and touched_since(task, cutoff):
+            pending.append(f"- {topic}：{row['issues'][0]}")
     if not pending:
         return None
-    reason = ("task-harness：以下近期改动过的任务交接记录不完整，结束前请处理（不适用就说明原因后结束）：\n"
+    reason = ("task-harness：以下本会话已绑定且近期改动过的任务交接记录不完整，结束前请处理：\n"
               + "\n".join(pending)
               + "\n用 harness.py checkpoint 记录当前状态；已交付文件不原位改写，修订另存新文件名。")
     key = hashlib.sha256(f"{Path.home()}|{root}|{payload.get('session_id', '')}".encode()).hexdigest()[:16]
@@ -206,6 +192,10 @@ def main():
     initialize = sub.add_parser("init")
     initialize.add_argument("--root", type=Path, required=True)
     initialize.add_argument("--tasks-dir", help="relative task directory, default projects")
+    bind = sub.add_parser("bind", help="associate a resumed task with this runtime session, without changing its records")
+    bind.add_argument("--root", type=Path, required=True)
+    bind.add_argument("--topic", required=True)
+    bind.add_argument("--session-id", help="defaults to CODEX_THREAD_ID, CODEX_SESSION_ID or CLAUDE_SESSION_ID")
     for action in ("tasks", "handoff", "doctor"):
         command = sub.add_parser(action)
         command.add_argument("--root", type=Path, required=True)
@@ -246,6 +236,8 @@ def main():
         result = catalog()
     elif args.action == "init":
         result = workspace.init(args.root.resolve(), args.tasks_dir)
+    elif args.action == "bind":
+        result = workspace.bind_session(args.root.resolve(), args.topic, args.session_id)
     elif args.action == "tasks":
         result = workspace.inventory(args.root.resolve())
     elif args.action == "handoff":

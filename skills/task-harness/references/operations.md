@@ -51,7 +51,7 @@ list 展示公共资源目录；tasks 展示本工作区任务。doctor 检查 g
 本包默认不装 hook。用户同意后，可以给 Claude Code 或 Codex 加两个 hook：
 
 - **SessionStart**：注入一段简报，写明建档位置、三条命令和最多 5 项未完成任务，约 2KB 以内。
-- **Stop**：会话结束时，本会话提到过的任务如果近期改动过、却没有交接或需要关注，就提醒一次。同一提醒在同一会话只出现一次，`stop_hook_active` 时放行。运行时没给 transcript_path 时，退回检查近期改动过的全部任务。近期窗口默认 24 小时，实例可在 `.task-harness.json` 里设 `"hook": {"stop_recent_hours": N}`（1–720）。
+- **Stop**：会话结束时，只检查显式绑定到本会话的任务；近期改动但未交接或需关注时提醒一次。同一提醒在同一会话只出现一次，`stop_hook_active` 时放行。无会话ID或未绑定任务时静默；不解析 transcript，不因日志缺失退回检查全部任务，也不把总览、读取或别人的hook提示当作归属。近期窗口默认 24 小时，实例可在 `.task-harness.json` 里设 `"hook": {"stop_recent_hours": N}`（1–720）。
 
 ```sh
 python3 PACKAGE/scripts/harness.py hook --print-config claude [--root INSTANCE]   # settings.json 的 hooks 片段
@@ -59,6 +59,8 @@ python3 PACKAGE/scripts/harness.py hook --print-config codex [--root INSTANCE]  
 ```
 
 不加 `--root` 时，hook 从会话目录向上找 `.task-harness.json`，找不到就静默，所以装在用户级也不干扰其他项目。实例不在会话目录的上级（例如放在项目根下的 `workspace/`）时，要加 `--root`。片段合并进已有配置，先看已有 hooks，不覆盖。hook 出错一律放行。它不阻止写文件，也不是权限边界。
+
+实际新建或续做任务后执行 `python3 PACKAGE/scripts/harness.py bind --root INSTANCE --topic TOPIC --session-id 当前会话ID`。Codex 的 `CODEX_THREAD_ID` / `CODEX_SESSION_ID` 或 `CLAUDE_SESSION_ID` 可用时，new/checkpoint 自动绑定；没有这些环境变量时使用 SessionStart 注入的会话ID显式 bind。关联由 workspace 核心保存在实例 `.task-harness-sessions/<会话哈希>/<任务名>`，每个关联独立写入，跨会话不会互相覆盖；不改任务文件、不存副本任务状态。已有进行中的会话未绑定时只放行，实际续做后再绑定，不从旧日志猜归属。
 
 hook 不是可靠的入口。2026-10-31 实测：Claude Code 2.1.316 的 headless 模式记录了 SessionStart 上下文，模型却没有使用；codex-cli 0.166.0 的项目 hooks 要在交互会话里信任后才执行。长期接入以项目入口文档（AGENTS.md、CLAUDE.md 或不进提交的 CLAUDE.local.md）里的一段指引为主，hook 只做补充。
 

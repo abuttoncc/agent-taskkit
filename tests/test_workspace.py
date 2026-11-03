@@ -190,6 +190,7 @@ class WorkspaceTest(unittest.TestCase):
     def test_stop_hook_reminds_once_and_stays_quiet_elsewhere(self):
         task = self.start()
         payload = {"cwd": str(task), "session_id": f"test-{id(self)}"}
+        workspace.bind_session(self.root, "brief", payload["session_id"])
         first = harness.stop_reminder(payload)
         self.assertEqual(first["decision"], "block")
         self.assertIn("brief", first["reason"])
@@ -219,7 +220,8 @@ class WorkspaceTest(unittest.TestCase):
         for index in range(6):
             harness.new(self.root, f"extra-{index}", "Another goal")
         text = harness.session_brief({"cwd": str(self.root / "work")})["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("Write the plan body", text)
+        self.assertNotIn("Write the plan body", text)
+        self.assertIn("不要把未点名的任务当成当前目标", text)
         self.assertIn("另有 2 项", text)
         self.assertLess(len(text.encode("utf-8")), 2000)
 
@@ -230,6 +232,7 @@ class WorkspaceTest(unittest.TestCase):
         data["hook"] = {"stop_recent_hours": 1}
         marker.write_text(json.dumps(data), encoding="utf-8")
         payload = {"cwd": str(task), "session_id": f"window-{id(self)}"}
+        workspace.bind_session(self.root, "brief", payload["session_id"])
         self.assertIsNone(harness.stop_reminder(payload, now=time.time() + 2 * 3600))
         self.assertEqual(harness.stop_reminder(payload)["decision"], "block")
         data["hook"] = {"stop_recent_hours": 0}
@@ -237,11 +240,12 @@ class WorkspaceTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             harness.stop_reminder({**payload, "session_id": "bad-window"})
 
-    def test_stop_reminder_only_covers_tasks_this_session_named(self):
+    def test_stop_reminder_only_covers_tasks_this_session_bound(self):
         self.start()
         harness.new(self.root, "other-work", "Owned by a concurrent session")
         transcript = self.base / "session.jsonl"
         transcript.write_text('{"tool":"Edit","file_path":"projects/brief/request.md"}\n', encoding="utf-8")
+        workspace.bind_session(self.root, "brief", f"mine-{id(self)}")
         result = harness.stop_reminder({"cwd": str(self.root), "session_id": f"mine-{id(self)}", "transcript_path": str(transcript)})
         self.assertIn("brief", result["reason"])
         self.assertNotIn("other-work", result["reason"])
@@ -255,6 +259,7 @@ class WorkspaceTest(unittest.TestCase):
         payload = {"cwd": str(project), "session_id": f"root-{id(self)}"}
         self.assertIsNone(harness.session_brief(payload))
         self.assertIn("brief", harness.session_brief(payload, self.root)["hookSpecificOutput"]["additionalContext"])
+        workspace.bind_session(self.root, "brief", payload["session_id"])
         self.assertEqual(harness.stop_reminder(payload, root=self.root)["decision"], "block")
         self.assertIsNone(harness.session_brief(payload, project))
         command = [sys.executable, "-B", str(PACKAGE / "scripts/harness.py"), "hook", "--event", "session-start", "--root", str(self.root)]
