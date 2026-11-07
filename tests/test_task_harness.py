@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -219,6 +220,71 @@ class ContractTest(unittest.TestCase):
         self.assertFalse(result["issues"])
         saved = json.loads(sorted((task / "handoffs").glob("*.json"))[-1].read_text(encoding="utf-8"))
         self.assertIn("sources.md", saved["evidence_fingerprints"])
+
+    def test_team_done_requires_workflow_and_evolve_stays_local(self):
+        before = snapshot(PACKAGE)
+        harness.new(self.instance, "collab", "Check two sources and the repo", template="team")
+        task = self.instance / "projects/collab"
+        request = (task / "request.md").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"(?m)^席：([a-z]+)\s*$", request),
+                         ["leader", "search", "analysis", "structure"])
+        (task / "deliverables").mkdir()
+        (task / "deliverables/answer.md").write_text("final", encoding="utf-8")
+        args = dict(deliverables=["deliverables/answer.md"], review="Read the answer against the request.")
+        with self.assertRaisesRegex(ValueError, "workflow.md"):
+            workspace.checkpoint(self.instance, "collab", "done", "No workflow", **args)
+        (task / "outputs").mkdir()
+        (task / "outputs/workflow.md").write_text("## 并行\n\n## 串行\nboth steps\n## 谁在等\nleader\n## 停止\nenough\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "并行"):
+            workspace.checkpoint(self.instance, "collab", "done", "Empty parallel", **args)
+        (task / "outputs/workflow.md").write_text(
+            "## 并行\n## 备注\nthis note must not fill the parallel section\n## 串行\nboth steps\n## 谁在等\nleader\n## 停止\nenough\n",
+            encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "并行"):
+            workspace.checkpoint(self.instance, "collab", "done", "Foreign heading", **args)
+        (task / "outputs/workflow.md").write_text(
+            "## 并行\nsearch and analysis together\n## 串行\nleader closes\n## 谁在等\nleader searched while waiting\n## 停止\nmaterials were enough\n",
+            encoding="utf-8")
+        (task / "request.md").write_text(request + "席：extra\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "seats"):
+            workspace.checkpoint(self.instance, "collab", "done", "Extra seat", **args)
+        (task / "request.md").write_text(request, encoding="utf-8")
+        result = workspace.checkpoint(self.instance, "collab", "done", "Closed", **args)
+        self.assertEqual(result["recorded_status"], "done")
+        self.assertIn("outputs/workflow.md", json.loads(sorted((task / "handoffs").glob("*.json"))[-1].read_text())["evidence_fingerprints"])
+        with self.assertRaisesRegex(ValueError, "candidate"):
+            workspace.evolve(self.instance, "collab")
+        (task / "evolve").mkdir()
+        (task / "evolve/candidate.md").write_text("证据：outputs/workflow.md\n建议：信息够了就停止等待\n", encoding="utf-8")
+        first = workspace.evolve(self.instance, "collab")
+        second = workspace.evolve(self.instance, "collab")
+        self.assertEqual((first["status"], first["applied_to_package"]), ("candidate", False))
+        self.assertEqual(second["status"], "ready")
+        self.assertEqual(second["repeats"], 2)
+        (task / "evolve/candidate.md").write_text("证据：outputs/workflow.md\n建议：信息\n", encoding="utf-8")
+        short = workspace.evolve(self.instance, "collab")
+        self.assertEqual((short["status"], short["repeats"]), ("candidate", 1))
+        inbox = (self.instance / "playbooks.local/inbox.md").read_text(encoding="utf-8")
+        self.assertIn("建议：信息够了就停止等待", inbox)
+        self.assertEqual(snapshot(PACKAGE), before)
+        with self.assertRaisesRegex(ValueError, "team"):
+            workspace.evolve(self.instance, "api-check")
+        spaced = self.base / "spaced"
+        workspace.init(spaced, "my tasks")
+        harness.new(spaced, "collab", "Check two sources and the repo", template="team")
+        spaced_task = spaced / "my tasks" / "collab"
+        (spaced_task / "deliverables").mkdir()
+        (spaced_task / "deliverables/answer.md").write_text("final", encoding="utf-8")
+        (spaced_task / "outputs").mkdir()
+        (spaced_task / "outputs/workflow.md").write_text(
+            "## 并行\nsearch and analysis together\n## 串行\nleader closes\n## 谁在等\nleader searched while waiting\n## 停止\nmaterials were enough\n",
+            encoding="utf-8")
+        workspace.checkpoint(spaced, "collab", "done", "Closed", deliverables=["deliverables/answer.md"],
+                             review="Read the answer against the request.")
+        (spaced_task / "evolve").mkdir()
+        (spaced_task / "evolve/candidate.md").write_text("证据：outputs/workflow.md\n建议：信息够了就停止等待\n", encoding="utf-8")
+        self.assertEqual(workspace.evolve(spaced, "collab")["repeats"], 1)
+        self.assertEqual(workspace.evolve(spaced, "collab")["status"], "ready")
 
     def test_install_update_preserves_instance_and_refuses_modified_package(self):
         dest = self.base / "installed/task-harness"

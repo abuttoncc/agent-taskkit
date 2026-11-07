@@ -18,9 +18,10 @@ new 默认 **general/task**，只生成任务 README、request 和 task.json；�
 
 ```sh
 python3 PACKAGE/scripts/harness.py new --root INSTANCE --template verify --scene api --topic api-check --question '验证目标'
+python3 PACKAGE/scripts/harness.py new --root INSTANCE --template team --topic collab --question '用户的具体目标'
 ```
 
-详见 [验证](verify.md)、[通用任务](general.md)。金融研究任务由 finance-research Skill 的 `research.py new` 创建，任务落在同一工作区，交接仍用本手册的 checkpoint。创建后仅为 DRAFT，Agent 要填写目标与完成条件再执行。inputs 等必要文件的父目录自动建立；outputs/deliverables 等空目录不预建，需要写文件时由 Agent 或相应脚本建立。
+详见 [验证](verify.md)、[通用任务](general.md)、[固定四席](team.md)。金融研究任务由 finance-research Skill 的 `research.py new` 创建，任务落在同一工作区，交接仍用本手册的 checkpoint。创建后仅为 DRAFT，Agent 要填写目标与完成条件再执行。inputs 等必要文件的父目录自动建立；outputs/deliverables 等空目录不预建，需要写文件时由 Agent 或相应脚本建立。
 
 ## 留交接与续做
 
@@ -31,7 +32,9 @@ python3 PACKAGE/scripts/harness.py checkpoint --root INSTANCE --topic brief --st
 python3 PACKAGE/scripts/harness.py handoff --root INSTANCE --topic brief
 ```
 
-上面说明需替换为真实内容；不能为通过检查填示例话。`--deliverable` 可重复传入，路径相对 TASK；原位代码交付可引用任务内的交付说明和实际检查日志。done 至少需要非空交付文件、实查说明且无阻塞；verify 任务还要 `--report outputs/<run>-comparison.json`，research 任务要 `--report outputs/research-review-<n>.json`。报告结论 PASS/PARTIAL/FAIL 都可以 done，结论记入快照；报告生成后证据被改动则拒绝，需重跑检查器。task.json、README.md、request.md、spec.json 和 handoffs/ 不算交付物。unfinished 需要下一步，blocked 需要阻塞及解除条件。状态描述工作是否交付，与 API/研究的验收结论分开。
+上面说明需替换为真实内容；不能为通过检查填示例话。`--deliverable` 可重复传入，路径相对 TASK；原位代码交付可引用任务内的交付说明和实际检查日志。done 至少需要非空交付文件、实查说明且无阻塞；verify 任务还要 `--report outputs/<run>-comparison.json`，research 任务要 `--report outputs/research-review-<n>.json`。报告结论 PASS/PARTIAL/FAIL 都可以 done，结论记入快照；报告生成后证据被改动则拒绝，需重跑检查器。task.json、README.md、request.md、spec.json 和 handoffs/ 不算交付物。team 任务的 done 还要有四节都非空的 `outputs/workflow.md`，席位必须仍是 leader、search、analysis、structure。可复用的一句做法写在任务 `evolve/candidate.md`（`证据：outputs/workflow.md` 与一行 `建议：`），再执行 `python3 PACKAGE/scripts/harness.py evolve --root INSTANCE --topic TOPIC`。它只追加工作区 `playbooks.local/inbox.md`。同一句第二次出现标为 ready。脚本不修改公共 Skill。
+
+unfinished 需要下一步，blocked 需要阻塞及解除条件。状态描述工作是否交付，与 API/研究的验收结论分开。
 
 每次 checkpoint 写新 handoffs/000001.json，绑定任务定义与交付文件的指纹，不覆盖旧快照。进行中的任务改 request 或草稿属正常，handoff 只在 changed_since_checkpoint 中列出。两种情况会标 NEEDS_ATTENTION：已被 done 快照交付过的文件被改动（之后 checkpoint 拒绝写入，先恢复原文件，修订另存新文件名；原字节确实找不回时用 `--overwritten 路径 --reason 原因` 把这次丢失记入新快照，之后再改仍会报出）；最新快照为 done 后定义又被改动（在 events.md 记范围变化，再存新快照）。`handoff` 无快照或需关注时退出 1，格式或路径错误退出 2。检查不证明语义正确，也不能抵抗同时恶意改写记录与文件。
 
@@ -44,7 +47,7 @@ python3 PACKAGE/scripts/harness.py list
 python3 PACKAGE/scripts/harness.py doctor --root INSTANCE
 ```
 
-list 展示公共资源目录；tasks 展示本工作区任务。doctor 检查 general 交接、verify 合同或 research 记录；草稿显示未就绪。脚本检查、记录状态、业务结果是不同事实；授权、连通、生效没实测则为 unknown。脚本不执行任务合同里的 run_command。
+list 展示公共资源目录；tasks 展示本工作区任务。doctor 检查 general 与 team 交接、verify 合同或 research 记录；草稿显示未就绪。脚本检查、记录状态、业务结果是不同事实；授权、连通、生效没实测则为 unknown。脚本不执行任务合同里的 run_command。
 
 ## 可选：会话 hook
 

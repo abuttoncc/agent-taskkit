@@ -1,7 +1,7 @@
 {
   "schema": "ablemind.task-harness/v1",
   "name": "task-harness",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "templates": [
     {
       "name": "general",
@@ -24,6 +24,29 @@
         "scripts/harness.py",
         "scripts/workspace.py",
         "scripts/contract.py"
+      ]
+    },
+    {
+      "name": "team",
+      "scenes": [
+        "collaborate"
+      ],
+      "status": "preview",
+      "reference": "references/team.md",
+      "title": "固定四席协作",
+      "use_when": [
+        "需要多源核对或复杂推理，并留下并行、等待和停止记录",
+        "要把一次任务里可复用的做法收成工作区本地候选"
+      ],
+      "scene_resources": {
+        "collaborate": "references/team.md"
+      },
+      "assets": [
+        "assets/team/request.md"
+      ],
+      "scripts": [
+        "scripts/harness.py",
+        "scripts/workspace.py"
       ]
     },
     {
@@ -70,7 +93,8 @@
     "operations": "references/operations.md",
     "installation": "INSTALL.md",
     "workspace": "references/workspace.md",
-    "external": "references/external.md"
+    "external": "references/external.md",
+    "team": "references/team.md"
   },
   "extensions": {
     "research": {
