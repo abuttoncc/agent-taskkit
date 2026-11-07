@@ -1,6 +1,6 @@
 ---
 name: task-harness
-description: 给工作区建立任务秩序：按需建任务目录与提示词框架，接续旧任务，用交接快照记录状态、下一步和交付，已交付文件不被原位改写。用于初始化工作区、需要分步推进或留存成果的新任务、继续上次的任务、查看未完成任务、API 与明确承诺的验证；简单问答无需建档。金融研究另用 finance-research。
+description: 给工作区建立任务秩序：按需建任务目录与提示词框架，接续旧任务，用交接快照记录状态、下一步和交付，已交付文件不被原位改写。用于初始化工作区、需要分步推进或留存成果的新任务、继续上次的任务、查看未完成任务、API 与明确承诺的验证。任务结论依赖仓库外的现行事实时，先带来源地调研再交付。简单问答无需建档。金融研究另用 finance-research。
 ---
 
 # Task Harness
@@ -36,6 +36,7 @@ python3 TH/scripts/harness.py checkpoint --root INSTANCE --topic TOPIC --status 
 - new 默认 general，生成 README.md、request.md、task.json。创建后是 DRAFT：先按 request 的五节填目标、范围、材料、交付、完成与停止条件，再执行。
 - 验证类任务加 `--template verify`，流程见 [验证](references/verify.md)；done 时还要 `--report outputs/<run>-comparison.json`。
 - 说明要写真实内容，不能为通过检查填示例话。done 需要非空交付文件、实查说明、无阻塞；控制文件（request/README/task.json/handoffs）不算交付。
+- 结论依赖仓库外、会过时的事实时，把 request 里单独一行的 `外部事实：无` 改成 `外部事实：有`，按 [外部调研](references/external.md) 写入 `sources.md`。纯仓库内工作保持「无」。标了「有」但 sources.md 没有 http(s) 链接时，done 会被拒绝。
 
 ## 交接规则
 
@@ -50,6 +51,7 @@ python3 TH/scripts/harness.py checkpoint --root INSTANCE --topic TOPIC --status 
 | 什么时候 | 读哪里 |
 |---|---|
 | 填 general 任务的 request | [通用任务框架](references/general.md) |
+| 结论依赖仓库外的现行事实 | [外部调研](references/external.md) |
 | 初始化已有项目、个人偏好与方法放哪 | [工作区秩序](references/workspace.md) |
 | API 测试、验证承诺 | [验证](references/verify.md)、[API 场景卡](references/api.md) |
 | 体检、安装与更新、可选会话 hook | [执行手册](references/operations.md) |

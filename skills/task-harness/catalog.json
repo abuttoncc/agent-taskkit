@@ -1,7 +1,7 @@
 {
   "schema": "ablemind.task-harness/v1",
   "name": "task-harness",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "templates": [
     {
       "name": "general",
@@ -69,7 +69,8 @@
     "rules": "references/red-lines.md",
     "operations": "references/operations.md",
     "installation": "INSTALL.md",
-    "workspace": "references/workspace.md"
+    "workspace": "references/workspace.md",
+    "external": "references/external.md"
   },
   "extensions": {
     "research": {

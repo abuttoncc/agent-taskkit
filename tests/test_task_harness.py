@@ -194,6 +194,32 @@ class ContractTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             workspace.checkpoint(self.instance, "api-check", "done", "Again", report="outputs/run-01-comparison.json", **args)
 
+    def test_external_facts_done_requires_sourced_url(self):
+        harness.new(self.instance, "outside", "Compare the current public API")
+        task = self.instance / "projects/outside"
+        request = (task / "request.md").read_text(encoding="utf-8")
+        self.assertIn("\n外部事实：无\n", request)
+        (task / "deliverables").mkdir()
+        (task / "deliverables/answer.md").write_text("local only", encoding="utf-8")
+        args = dict(deliverables=["deliverables/answer.md"], review="Opened the local answer.")
+        workspace.checkpoint(self.instance, "outside", "done", "No external facts", **args)
+        (task / "request.md").write_text(request.replace("外部事实：无", "外部事实：有待确认"), encoding="utf-8")
+        workspace.checkpoint(self.instance, "outside", "active", "Marker is not 有", next_step="keep going")
+        (task / "request.md").write_text("外部事实：有，核对公开文档\n" + request.replace("外部事实：无\n", ""), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "sources.md"):
+            workspace.checkpoint(self.instance, "outside", "done", "Missing sources", **args)
+        (task / "sources.md").write_text("# 来源\n\n没有链接\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "http"):
+            workspace.checkpoint(self.instance, "outside", "done", "Missing url", **args)
+        (task / "sources.md").write_text(
+            "# 来源\n\n| S1 | 文档 / 2026-11-07 | 原文 | https://example.com/docs | 仅示例 |\n",
+            encoding="utf-8")
+        result = workspace.checkpoint(self.instance, "outside", "done", "Sourced", **args)
+        self.assertEqual(result["recorded_status"], "done")
+        self.assertFalse(result["issues"])
+        saved = json.loads(sorted((task / "handoffs").glob("*.json"))[-1].read_text(encoding="utf-8"))
+        self.assertIn("sources.md", saved["evidence_fingerprints"])
+
     def test_install_update_preserves_instance_and_refuses_modified_package(self):
         dest = self.base / "installed/task-harness"
         install.install(PACKAGE, dest)

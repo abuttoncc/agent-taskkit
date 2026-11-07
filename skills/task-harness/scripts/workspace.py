@@ -12,6 +12,8 @@ PACKAGE = Path(__file__).resolve().parents[1]
 MARKER = ".task-harness.json"
 TOPIC = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 CONTROL_FILES = {("task.json",), ("README.md",), ("request.md",), ("spec.json",)}
+EXTERNAL_FACTS = re.compile(r"(?m)^外部事实\s*[:：]\s*有(?:\s*$|\s*[,，。；;])")
+SOURCE_URL = re.compile(r"https?://")
 
 
 def catalog():
@@ -225,6 +227,14 @@ def snapshots(task):
     return paths
 
 
+def marks_external_facts(task):
+    """True when the task definition's own line says 外部事实：有."""
+    path = safe_path(task, definition_file(metadata(task)["template"]))
+    if not path.is_file():
+        return False
+    return EXTERNAL_FACTS.search(path.read_text(encoding="utf-8")) is not None
+
+
 def validate_handoff(task, data):
     require(isinstance(data, dict) and data.get("schema_version") == 1, "unknown handoff schema")
     require(data.get("status") in {"active", "blocked", "done"}, "invalid handoff status")
@@ -329,7 +339,14 @@ def checkpoint(root, topic, status, summary, next_step="", blocker="", deliverab
     require(not report or has_checker, f"{template} tasks have no checker report")
     assessment = check_report(task, template, report) if report or (status == "done" and has_checker) else None
     evidence = {}
-    for ref in [definition, *refs, *([report] if report else [])]:
+    extra = []
+    if status == "done" and marks_external_facts(task):
+        extra.append("sources.md")
+        source = safe_path(task, "sources.md")
+        body = source.read_text(encoding="utf-8") if source.is_file() else ""
+        require(source.is_file() and source.stat().st_size > 0 and SOURCE_URL.search(body),
+                "done task marked 外部事实：有 needs sources.md with at least one http(s) URL")
+    for ref in [definition, *refs, *([report] if report else []), *extra]:
         path = safe_path(task, ref)
         require(path.is_file() and path.stat().st_size > 0, f"missing or empty handoff evidence: {ref}")
         evidence[ref] = fingerprint(path)
