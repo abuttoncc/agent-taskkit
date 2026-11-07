@@ -231,14 +231,15 @@ def snapshots(task):
 
 
 def workflow_sections(text):
-    """Bodies under the four required team headings. Other headings are ignored."""
+    """Bodies under the four required team headings. Any other level-two heading closes the current section."""
     sections, current, buf = {}, None, []
     for line in text.splitlines():
         match = re.match(r"^##\s+(.+?)\s*$", line)
-        if match and match.group(1) in TEAM_HEADINGS:
+        if match:
             if current is not None:
                 sections[current] = "\n".join(buf).strip()
-            current, buf = match.group(1), []
+            current = match.group(1) if match.group(1) in TEAM_HEADINGS else None
+            buf = []
         elif current is not None:
             buf.append(line)
     if current is not None:
@@ -428,7 +429,7 @@ def evolve(root, topic):
     prior = inbox.read_text(encoding="utf-8") if inbox.exists() else ""
     recorded_line = re.compile(
         r"(?m)^- \d{4}-\d{2}-\d{2} \S+ (?:candidate|ready) 重复：\d+ 建议："
-        + re.escape(suggestion) + r" 证据：\S+/outputs/workflow\.md$")
+        + re.escape(suggestion) + r" 证据：.+/outputs/workflow\.md$")
     repeats = len(recorded_line.findall(prior)) + 1
     status = "ready" if repeats >= 2 else "candidate"
     folder.mkdir(parents=True, exist_ok=True)

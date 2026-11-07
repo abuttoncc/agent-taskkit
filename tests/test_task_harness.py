@@ -238,6 +238,11 @@ class ContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "并行"):
             workspace.checkpoint(self.instance, "collab", "done", "Empty parallel", **args)
         (task / "outputs/workflow.md").write_text(
+            "## 并行\n## 备注\nthis note must not fill the parallel section\n## 串行\nboth steps\n## 谁在等\nleader\n## 停止\nenough\n",
+            encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "并行"):
+            workspace.checkpoint(self.instance, "collab", "done", "Foreign heading", **args)
+        (task / "outputs/workflow.md").write_text(
             "## 并行\nsearch and analysis together\n## 串行\nleader closes\n## 谁在等\nleader searched while waiting\n## 停止\nmaterials were enough\n",
             encoding="utf-8")
         (task / "request.md").write_text(request + "席：extra\n", encoding="utf-8")
@@ -264,6 +269,22 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(snapshot(PACKAGE), before)
         with self.assertRaisesRegex(ValueError, "team"):
             workspace.evolve(self.instance, "api-check")
+        spaced = self.base / "spaced"
+        workspace.init(spaced, "my tasks")
+        harness.new(spaced, "collab", "Check two sources and the repo", template="team")
+        spaced_task = spaced / "my tasks" / "collab"
+        (spaced_task / "deliverables").mkdir()
+        (spaced_task / "deliverables/answer.md").write_text("final", encoding="utf-8")
+        (spaced_task / "outputs").mkdir()
+        (spaced_task / "outputs/workflow.md").write_text(
+            "## 并行\nsearch and analysis together\n## 串行\nleader closes\n## 谁在等\nleader searched while waiting\n## 停止\nmaterials were enough\n",
+            encoding="utf-8")
+        workspace.checkpoint(spaced, "collab", "done", "Closed", deliverables=["deliverables/answer.md"],
+                             review="Read the answer against the request.")
+        (spaced_task / "evolve").mkdir()
+        (spaced_task / "evolve/candidate.md").write_text("证据：outputs/workflow.md\n建议：信息够了就停止等待\n", encoding="utf-8")
+        self.assertEqual(workspace.evolve(spaced, "collab")["repeats"], 1)
+        self.assertEqual(workspace.evolve(spaced, "collab")["status"], "ready")
 
     def test_install_update_preserves_instance_and_refuses_modified_package(self):
         dest = self.base / "installed/task-harness"
