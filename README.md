@@ -8,6 +8,8 @@
 
 0.5.2：通用任务的结论若依赖仓库外、会过时的事实，把 request 里的 `外部事实：无` 改成 `外部事实：有`。标成「有」的任务在 done 前要有带 http(s) 链接的 `sources.md`。做法见 [外部调研](skills/task-harness/references/external.md)。安装说明仍指向已发布的 v0.5.1，本条随下一次打标签生效。
 
+0.5.3：多源核对或复杂推理用 `--template team`。四席固定为 leader、search、analysis、structure。done 前写 `outputs/workflow.md`（并行、串行、谁在等、停止）。可复用的做法用 `evolve` 记入工作区 `playbooks.local/inbox.md`，不改已安装的包。做法见 [固定四席](skills/task-harness/references/team.md)。
+
 ## 怎么工作
 
 1. **先认工作区**：读已有规则与入口。可以先初始化工作区，不必虚构任务；已有文件和目录约定保留。

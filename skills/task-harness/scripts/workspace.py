@@ -14,6 +14,9 @@ TOPIC = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 CONTROL_FILES = {("task.json",), ("README.md",), ("request.md",), ("spec.json",)}
 EXTERNAL_FACTS = re.compile(r"(?m)^外部事实\s*[:：]\s*有(?:\s*$|\s*[,，。；;])")
 SOURCE_URL = re.compile(r"https?://")
+TEAM_SEATS = ("leader", "search", "analysis", "structure")
+TEAM_HEADINGS = ("并行", "串行", "谁在等", "停止")
+SEAT_LINE = re.compile(r"(?m)^席：([a-z]+)\s*$")
 
 
 def catalog():
@@ -227,6 +230,22 @@ def snapshots(task):
     return paths
 
 
+def workflow_sections(text):
+    """Bodies under the four required team headings. Other headings are ignored."""
+    sections, current, buf = {}, None, []
+    for line in text.splitlines():
+        match = re.match(r"^##\s+(.+?)\s*$", line)
+        if match and match.group(1) in TEAM_HEADINGS:
+            if current is not None:
+                sections[current] = "\n".join(buf).strip()
+            current, buf = match.group(1), []
+        elif current is not None:
+            buf.append(line)
+    if current is not None:
+        sections[current] = "\n".join(buf).strip()
+    return sections
+
+
 def marks_external_facts(task):
     """True when the task definition's own line says 外部事实：有."""
     path = safe_path(task, definition_file(metadata(task)["template"]))
@@ -340,6 +359,14 @@ def checkpoint(root, topic, status, summary, next_step="", blocker="", deliverab
     assessment = check_report(task, template, report) if report or (status == "done" and has_checker) else None
     evidence = {}
     extra = []
+    if status == "done" and template == "team":
+        seats = SEAT_LINE.findall(safe_path(task, definition).read_text(encoding="utf-8"))
+        require(tuple(seats) == TEAM_SEATS, "team task seats must stay leader, search, analysis, structure, in that order")
+        extra.append("outputs/workflow.md")
+        workflow = safe_path(task, "outputs/workflow.md")
+        sections = workflow_sections(workflow.read_text(encoding="utf-8") if workflow.is_file() else "")
+        missing = [name for name in TEAM_HEADINGS if not sections.get(name)]
+        require(not missing, "outputs/workflow.md needs nonempty sections: " + "、".join(missing))
     if status == "done" and marks_external_facts(task):
         extra.append("sources.md")
         source = safe_path(task, "sources.md")
@@ -374,6 +401,46 @@ def checkpoint(root, topic, status, summary, next_step="", blocker="", deliverab
     target = safe_path(task, f"handoffs/{sequence:06d}.json")
     write_new(target, data)
     return handoff_check(task)
+
+
+def evolve(root, topic):
+    """Append one evidenced suggestion to the workspace inbox. Never edit the skill package."""
+    root = root.resolve()
+    task = task_path(root, topic)
+    require(metadata(task)["template"] == "team", "evolve only accepts team tasks")
+    recorded = handoff_check(task)
+    require(recorded.get("recorded_status") == "done" and not recorded.get("issues"),
+            "evolve needs a clean done handoff")
+    latest = json.loads(snapshots(task)[-1].read_text(encoding="utf-8"))
+    require("outputs/workflow.md" in latest.get("evidence_fingerprints", {}),
+            "done handoff did not bind outputs/workflow.md")
+    candidate = safe_path(task, "evolve/candidate.md")
+    require(candidate.is_file() and not candidate.is_symlink(), "missing evolve/candidate.md")
+    text = candidate.read_text(encoding="utf-8")
+    require(re.search(r"(?m)^证据：outputs/workflow\.md\s*$", text), "candidate must cite 证据：outputs/workflow.md")
+    found = re.search(r"(?m)^建议：(\S.*?)\s*$", text)
+    suggestion = found.group(1).strip() if found else ""
+    require(suggestion and "不要复述" not in suggestion, "candidate needs one real 建议 line")
+    folder = root / "playbooks.local"
+    inbox = folder / "inbox.md"
+    require(not folder.is_symlink() and not inbox.is_symlink(), "playbooks.local cannot be a symlink")
+    require(not inbox.exists() or inbox.is_file(), "playbooks.local/inbox.md must be a file")
+    prior = inbox.read_text(encoding="utf-8") if inbox.exists() else ""
+    recorded_line = re.compile(
+        r"(?m)^- \d{4}-\d{2}-\d{2} \S+ (?:candidate|ready) 重复：\d+ 建议："
+        + re.escape(suggestion) + r" 证据：\S+/outputs/workflow\.md$")
+    repeats = len(recorded_line.findall(prior)) + 1
+    status = "ready" if repeats >= 2 else "candidate"
+    folder.mkdir(parents=True, exist_ok=True)
+    if not inbox.exists():
+        inbox.write_text("# 本地候选\n\n公共 Skill 不在这里改。同一建议再次出现后标为 ready，再由人决定是否写入 TaskKit 仓库。\n",
+                         encoding="utf-8")
+    line = (f"- {date.today().isoformat()} {topic} {status} 重复：{repeats} "
+            f"建议：{suggestion} 证据：{task.relative_to(root).as_posix()}/outputs/workflow.md\n")
+    with inbox.open("a", encoding="utf-8") as handle:
+        handle.write(line)
+    return {"recorded": str(inbox.relative_to(root)), "status": status, "repeats": repeats,
+            "applied_to_package": False}
 
 
 def inventory(root):

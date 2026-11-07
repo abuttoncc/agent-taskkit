@@ -38,7 +38,8 @@ def new(root, topic, question, template="general", scene=None):
                  "inputs/expected-v1.csv": (PACKAGE / "assets/verify/expected.csv").read_text(encoding="utf-8"),
                  **workspace.ledgers(today)}
     else:
-        request = (PACKAGE / "assets/general/request.md").read_text(encoding="utf-8")
+        asset = "team/request.md" if template == "team" else "general/request.md"
+        request = (PACKAGE / "assets" / asset).read_text(encoding="utf-8")
         files = {"request.md": request.replace("{{question}}", question)}
     return workspace.new_task(root, topic, question, template, scene, files, guide)
 
@@ -217,8 +218,11 @@ def main():
     create.add_argument("--root", type=Path, required=True)
     create.add_argument("--topic", required=True)
     create.add_argument("--question", required=True)
-    create.add_argument("--template", default="general", help="general or verify; research tasks come from finance-research")
+    create.add_argument("--template", default="general", help="general, team, or verify; research tasks come from finance-research")
     create.add_argument("--scene", help="scene from catalog; defaults to the first scene of the selected template")
+    grow = sub.add_parser("evolve", help="record one evidenced team suggestion locally; do not edit this package")
+    grow.add_argument("--root", type=Path, required=True)
+    grow.add_argument("--topic", required=True)
     args = parser.parse_args()
     if args.action == "hook":
         if args.print_config:
@@ -248,6 +252,8 @@ def main():
                                       args.overwritten, args.reason, args.report)
     elif args.action == "new":
         result = new(args.root.resolve(), args.topic, args.question, args.template, args.scene)
+    elif args.action == "evolve":
+        result = workspace.evolve(args.root.resolve(), args.topic)
     else:
         result = doctor(args.root.resolve())
     print(json.dumps(result, ensure_ascii=False, indent=2))
