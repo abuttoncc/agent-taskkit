@@ -32,7 +32,7 @@ python3 PACKAGE/scripts/harness.py checkpoint --root INSTANCE --topic brief --st
 python3 PACKAGE/scripts/harness.py handoff --root INSTANCE --topic brief
 ```
 
-上面说明需替换为真实内容；不能为通过检查填示例话。`--deliverable` 可重复传入，路径相对 TASK；原位代码交付可引用任务内的交付说明和实际检查日志。done 至少需要非空交付文件、实查说明且无阻塞；verify 任务还要 `--report outputs/<run>-comparison.json`，research 任务要 `--report outputs/research-review-<n>.json`。报告结论 PASS/PARTIAL/FAIL 都可以 done，结论记入快照；报告生成后证据被改动则拒绝，需重跑检查器。task.json、README.md、request.md、spec.json 和 handoffs/ 不算交付物。team 任务的 done 还要有四节都非空的 `outputs/workflow.md`，席位必须仍是 leader、search、analysis、structure。可复用的一句做法写在任务 `evolve/candidate.md`（`证据：outputs/workflow.md` 与一行 `建议：`），再执行 `python3 PACKAGE/scripts/harness.py evolve --root INSTANCE --topic TOPIC`。它只追加工作区 `playbooks.local/inbox.md`。同一句第二次出现标为 ready。脚本不修改公共 Skill。
+上面说明需替换为真实内容；不能为通过检查填示例话。`--deliverable` 可重复传入，路径相对 TASK；原位代码交付可引用任务内的交付说明和实际检查日志。done 至少需要非空交付文件、实查说明且无阻塞；verify 任务还要 `--report outputs/<run>-comparison.json`，research 任务要 `--report outputs/research-review-<n>.json`。报告结论 PASS/PARTIAL/FAIL 都可以 done，结论记入快照；报告生成后证据被改动则拒绝，需重跑检查器。task.json、README.md、request.md、spec.json 和 handoffs/ 不算交付物。team 任务的 done 还要有四节都非空的 `outputs/workflow.md`，席位必须仍是 leader、search、analysis、structure。派 search 和 analysis 时只执行 [宿主派工](hosts.md) 里认宿主命中的那一节。可复用的一句做法写在任务 `evolve/candidate.md`（`证据：outputs/workflow.md` 与一行 `建议：`），再执行 `python3 PACKAGE/scripts/harness.py evolve --root INSTANCE --topic TOPIC`。它只追加工作区 `playbooks.local/inbox.md`。同一句第二次出现标为 ready。脚本不修改公共 Skill。
 
 unfinished 需要下一步，blocked 需要阻塞及解除条件。状态描述工作是否交付，与 API/研究的验收结论分开。
 

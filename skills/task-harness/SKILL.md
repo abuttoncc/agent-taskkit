@@ -20,6 +20,19 @@ TH 是本 Skill 目录，INSTANCE 是工作区，TOPIC 是 kebab-case 任务名�
 | 新的独立目标，要分步推进或留存成果 | 新建任务，有关联时在 request 中引用旧任务 |
 | 已有成熟目录与任务入口 | 沿用原规则，只借本框架，不搬家 |
 
+## 认宿主
+
+执行固定四席前先认定运行时。只走匹配的一节，具体工具和文件路径在 [宿主派工](references/hosts.md)。从上到下，命中第一条就停。
+
+| 依据 | 运行时 | 本会话做什么 |
+|---|---|---|
+| 能调用 `spawn_subagent` | Grok Build | search、analysis 各派一个子任务，leader 留在本会话 |
+| 能调用 Agent 工具 | Claude Code | 用 Agent 工具派 search 与 analysis |
+| 有 `CODEX_THREAD_ID` 或 `CODEX_SESSION_ID` | Codex | 按宿主派工里的 Codex 节派两个子代理 |
+| 以上都不符合 | 单代理 | 按四席依次做完，workflow 写明没有并行进程 |
+
+structure 由 leader 在收口时完成，三家都不为它单开进程。
+
 实际续做任务时，用 `harness.py bind --root INSTANCE --topic TOPIC --session-id 当前会话ID` 绑定本会话；会话ID取 SessionStart 上下文或运行时环境。`new` / `checkpoint` 在可用的运行时会话环境下自动绑定。只读任务总览或参考其他任务不绑定。绑定只记录参与关系，不改变任务身份、定义或交付状态。
 
 ## 核心命令
@@ -37,7 +50,7 @@ python3 TH/scripts/harness.py checkpoint --root INSTANCE --topic TOPIC --status 
 - 验证类任务加 `--template verify`，流程见 [验证](references/verify.md)；done 时还要 `--report outputs/<run>-comparison.json`。
 - 说明要写真实内容，不能为通过检查填示例话。done 需要非空交付文件、实查说明、无阻塞；控制文件（request/README/task.json/handoffs）不算交付。
 - 结论依赖仓库外、会过时的事实时，把 request 里单独一行的 `外部事实：无` 改成 `外部事实：有`，按 [外部调研](references/external.md) 写入 `sources.md`。纯仓库内工作保持「无」。标了「有」但 sources.md 没有 http(s) 链接时，done 会被拒绝。
-- 多源核对、复杂推理，或要留下协作复盘时，用 `--template team`，按 [固定四席](references/team.md) 执行。done 需要 `outputs/workflow.md` 写明并行、串行、谁在等、停止。可复用的一句用 `evolve` 追加到工作区 `playbooks.local/inbox.md`，不改公共包。简单任务不用这个模板。
+- 多源核对、复杂推理，或要留下协作复盘时，用 `--template team`，按 [固定四席](references/team.md) 执行，派工按上面的认宿主表和 [宿主派工](references/hosts.md)。done 需要 `outputs/workflow.md` 写明并行、串行、谁在等、停止。可复用的一句用 `evolve` 追加到工作区 `playbooks.local/inbox.md`，不改公共包。简单任务不用这个模板。
 
 ## 交接规则
 
@@ -54,6 +67,7 @@ python3 TH/scripts/harness.py checkpoint --root INSTANCE --topic TOPIC --status 
 | 填 general 任务的 request | [通用任务框架](references/general.md) |
 | 结论依赖仓库外的现行事实 | [外部调研](references/external.md) |
 | 多源核对、复杂推理或协作复盘 | [固定四席](references/team.md) |
+| 按当前运行时派 search / analysis | [宿主派工](references/hosts.md) |
 | 初始化已有项目、个人偏好与方法放哪 | [工作区秩序](references/workspace.md) |
 | API 测试、验证承诺 | [验证](references/verify.md)、[API 场景卡](references/api.md) |
 | 体检、安装与更新、可选会话 hook | [执行手册](references/operations.md) |

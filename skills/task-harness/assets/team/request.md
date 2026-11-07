@@ -26,7 +26,7 @@ leader 是当前会话，唯一写给用户的交付由它收口。search 核对
 ## 执行与交付
 
 串行启动：leader 先写清要核的问题和各席要交的材料。
-并行收集：search、analysis 与 leader 自己的核对同时进行。leader 不等别人全部返回才开始自己的工作。
+并行收集：先读 task-harness 包内 references/hosts.md，只执行与当前运行时匹配的那一节。search、analysis 与 leader 自己的核对同时进行。leader 不等别人全部返回才开始自己的工作。
 同步之后，缺原文或数字冲突时再串行打开原始材料。
 信息已经够用，或这是纯生成且材料已够时，停止等待，由 leader 写最终交付。
 

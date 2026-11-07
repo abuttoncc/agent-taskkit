@@ -221,6 +221,17 @@ class ContractTest(unittest.TestCase):
         saved = json.loads(sorted((task / "handoffs").glob("*.json"))[-1].read_text(encoding="utf-8"))
         self.assertIn("sources.md", saved["evidence_fingerprints"])
 
+    def test_host_dispatch_reference_is_advertised(self):
+        info = json.loads((PACKAGE / "catalog.json").read_text(encoding="utf-8"))
+        self.assertEqual(info["shared"]["hosts"], "references/hosts.md")
+        body = (PACKAGE / "references/hosts.md").read_text(encoding="utf-8")
+        for heading in ("## Grok Build", "## Claude Code", "## Codex", "## 单代理"):
+            self.assertIn(heading, body)
+        skill = (PACKAGE / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("references/hosts.md", skill)
+        self.assertLess(skill.index("spawn_subagent"), skill.index("Agent 工具"))
+        self.assertLess(skill.index("Agent 工具"), skill.index("CODEX_THREAD_ID"))
+
     def test_team_done_requires_workflow_and_evolve_stays_local(self):
         before = snapshot(PACKAGE)
         harness.new(self.instance, "collab", "Check two sources and the repo", template="team")

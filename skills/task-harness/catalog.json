@@ -94,7 +94,8 @@
     "installation": "INSTALL.md",
     "workspace": "references/workspace.md",
     "external": "references/external.md",
-    "team": "references/team.md"
+    "team": "references/team.md",
+    "hosts": "references/hosts.md"
   },
   "extensions": {
     "research": {
